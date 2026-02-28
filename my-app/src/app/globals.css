@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
- --bg-primary: #f5f0e8;
+ --bg-primary: #e8f5f3;
   --bg-surface: #faf7f2;
   --bg-elevated: #ffffff;
   --accent-green: #2d6a4f;
@@ -35,7 +35,7 @@
 }
 
 body {
-  background: var(--bg-primary);
+  background: #a4f0e5;
   color: var(--text-primary);
   font-family: var(--font-sans);
 }

@@ -13,6 +13,9 @@ export async function getPreferenceByUserId(userId: string): Promise<{
   });
   if (!row) return null;
 
+  const snapshot = row.preferencesSnapshot as Partial<UserPreferences> | null;
+  const snapshotTravel = snapshot?.travel as Partial<TravelPreferences> | undefined;
+
   const travel: TravelPreferences = {
     trip_pace: row.tripPace,
     crowd_comfort: row.crowdComfort,
@@ -26,11 +29,13 @@ export async function getPreferenceByUserId(userId: string): Promise<{
     dislike_cold: row.dislikeCold,
     dislike_rain: row.dislikeRain,
     travel_vibe: row.travelVibe as TravelPreferences["travel_vibe"],
+    no_weather_dislikes:
+      snapshotTravel?.no_weather_dislikes ??
+      (!row.dislikeHeat && !row.dislikeCold && !row.dislikeRain),
     additional_notes: row.additionalNotes ?? undefined,
     completed: row.completed,
   };
 
-  const snapshot = row.preferencesSnapshot as Partial<UserPreferences> | null;
   const preferences: UserPreferences = snapshot
     ? { ...snapshot, travel }
     : {

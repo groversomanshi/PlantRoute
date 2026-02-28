@@ -92,13 +92,17 @@ export interface TravelPreferences {
   dislike_heat: boolean;
   dislike_cold: boolean;
   dislike_rain: boolean;
-  travel_vibe: "Chill" | "Adventure" | "Family" | "Romantic" | "Nightlife";
+  /** Explicit opt-out for weather dislikes (user tapped "None"). */
+  no_weather_dislikes?: boolean;
+  travel_vibe?: "Chill" | "Adventure" | "Family" | "Romantic" | "Nightlife";
   additional_notes?: string;
   /** Set when user completes onboarding so we don't show the form again. */
   completed?: boolean;
 }
 
-export const TRAVEL_VIBES: TravelPreferences["travel_vibe"][] = [
+export type TravelVibe = NonNullable<TravelPreferences["travel_vibe"]>;
+
+export const TRAVEL_VIBES: TravelVibe[] = [
   "Chill",
   "Adventure",
   "Family",
@@ -118,7 +122,8 @@ export const DEFAULT_TRAVEL_PREFERENCES: TravelPreferences = {
   dislike_heat: false,
   dislike_cold: false,
   dislike_rain: false,
-  travel_vibe: "Chill",
+  no_weather_dislikes: false,
+  travel_vibe: undefined,
   additional_notes: "",
 };
 

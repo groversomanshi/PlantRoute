@@ -17,7 +17,6 @@ function valueToScale(value: number): number {
 }
 
 interface SliderRowProps {
-  id: string;
   label: string;
   left: string;
   right: string;
@@ -28,7 +27,7 @@ interface SliderRowProps {
   requireDragToActivate?: boolean;
 }
 
-function SliderRow({ id, label, left, right, value, onChange, onActivated, requireDragToActivate = true }: SliderRowProps) {
+function SliderRow({ label, left, right, value, onChange, onActivated, requireDragToActivate = true }: SliderRowProps) {
   const [activated, setActivated] = useState(!requireDragToActivate);
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState(0.5);
@@ -337,6 +336,12 @@ interface TravelPreferencesFormProps {
   requireDragToActivate?: boolean;
   /** Called when all 8 sliders have been activated (dragged). Use to enable submit. */
   onAllSlidersActivated?: () => void;
+  /** Called whenever required non-slider sections become valid/invalid. */
+  onValidationChange?: (state: {
+    hasWeatherSelection: boolean;
+    hasVibeSelection: boolean;
+    isComplete: boolean;
+  }) => void;
 }
 
 export function TravelPreferencesForm({
@@ -345,8 +350,13 @@ export function TravelPreferencesForm({
   showTitle = true,
   requireDragToActivate = false,
   onAllSlidersActivated,
+  onValidationChange,
 }: TravelPreferencesFormProps) {
-  const [activatedCount, setActivatedCount] = useState(requireDragToActivate ? 0 : SLIDER_IDS.length);
+  const [, setActivatedCount] = useState(requireDragToActivate ? 0 : SLIDER_IDS.length);
+  const hasWeatherSelection = Boolean(
+    value.no_weather_dislikes || value.dislike_heat || value.dislike_cold || value.dislike_rain
+  );
+  const hasVibeSelection = Boolean(value.travel_vibe);
 
   const handleSliderActivated = useCallback(() => {
     setActivatedCount((prev) => {
@@ -360,6 +370,14 @@ export function TravelPreferencesForm({
     onChange({ ...value, ...patch });
   };
 
+  useEffect(() => {
+    onValidationChange?.({
+      hasWeatherSelection,
+      hasVibeSelection,
+      isComplete: hasWeatherSelection && hasVibeSelection,
+    });
+  }, [hasWeatherSelection, hasVibeSelection, onValidationChange]);
+
   return (
     <div className="space-y-6">
       {showTitle && (
@@ -369,7 +387,6 @@ export function TravelPreferencesForm({
       )}
 
       <SliderRow
-        id={SLIDER_IDS[0]}
         requireDragToActivate={requireDragToActivate}
         label="How packed do you like your days?"
         left="Very relaxed"
@@ -379,7 +396,6 @@ export function TravelPreferencesForm({
         onActivated={handleSliderActivated}
       />
       <SliderRow
-        id={SLIDER_IDS[1]}
         requireDragToActivate={requireDragToActivate}
         label="How much do crowds bother you?"
         left="Hate crowds"
@@ -389,7 +405,6 @@ export function TravelPreferencesForm({
         onActivated={handleSliderActivated}
       />
       <SliderRow
-        id={SLIDER_IDS[2]}
         requireDragToActivate={requireDragToActivate}
         label="How okay are you with early-morning activities (before ~8am)?"
         left="Avoid early mornings"
@@ -399,7 +414,6 @@ export function TravelPreferencesForm({
         onActivated={handleSliderActivated}
       />
       <SliderRow
-        id={SLIDER_IDS[3]}
         requireDragToActivate={requireDragToActivate}
         label="How okay are you with late-night activities (after ~11pm)?"
         left="Prefer early nights"
@@ -409,7 +423,6 @@ export function TravelPreferencesForm({
         onActivated={handleSliderActivated}
       />
       <SliderRow
-        id={SLIDER_IDS[4]}
         requireDragToActivate={requireDragToActivate}
         label="How much walking or physical activity per day is comfortable?"
         left="Minimal walking"
@@ -419,7 +432,6 @@ export function TravelPreferencesForm({
         onActivated={handleSliderActivated}
       />
       <SliderRow
-        id={SLIDER_IDS[5]}
         requireDragToActivate={requireDragToActivate}
         label="What activity price range usually feels comfortable?"
         left="Budget"
@@ -429,7 +441,6 @@ export function TravelPreferencesForm({
         onActivated={handleSliderActivated}
       />
       <SliderRow
-        id={SLIDER_IDS[6]}
         requireDragToActivate={requireDragToActivate}
         label="Do you prefer fixed plans or free time?"
         left="Mostly free time"
@@ -439,7 +450,6 @@ export function TravelPreferencesForm({
         onActivated={handleSliderActivated}
       />
       <SliderRow
-        id={SLIDER_IDS[7]}
         requireDragToActivate={requireDragToActivate}
         label="How sensitive are you to noisy / party environments?"
         left="Very sensitive"
@@ -451,14 +461,33 @@ export function TravelPreferencesForm({
 
       <div className="mb-6">
         <p className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
-          Weather dislikes
+          Weather dislikes (required)
         </p>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              update({
+                dislike_heat: false,
+                dislike_cold: false,
+                dislike_rain: false,
+                no_weather_dislikes: true,
+              })
+            }
+            className="rounded-full px-3 py-1.5 border text-sm transition-colors"
+            style={{
+              borderColor: value.no_weather_dislikes ? "var(--accent-green)" : "var(--border)",
+              background: value.no_weather_dislikes ? "var(--accent-green-light)" : "transparent",
+              color: value.no_weather_dislikes ? "var(--accent-green)" : "var(--text-primary)",
+            }}
+          >
+            None
+          </button>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={value.dislike_heat}
-              onChange={(e) => update({ dislike_heat: e.target.checked })}
+              onChange={(e) => update({ dislike_heat: e.target.checked, no_weather_dislikes: false })}
               className="rounded border-gray-300 accent-[#2d6a4f]"
             />
             <span className="text-sm" style={{ color: "var(--text-primary)" }}>
@@ -469,7 +498,7 @@ export function TravelPreferencesForm({
             <input
               type="checkbox"
               checked={value.dislike_cold}
-              onChange={(e) => update({ dislike_cold: e.target.checked })}
+              onChange={(e) => update({ dislike_cold: e.target.checked, no_weather_dislikes: false })}
               className="rounded border-gray-300 accent-[#2d6a4f]"
             />
             <span className="text-sm" style={{ color: "var(--text-primary)" }}>
@@ -480,7 +509,7 @@ export function TravelPreferencesForm({
             <input
               type="checkbox"
               checked={value.dislike_rain}
-              onChange={(e) => update({ dislike_rain: e.target.checked })}
+              onChange={(e) => update({ dislike_rain: e.target.checked, no_weather_dislikes: false })}
               className="rounded border-gray-300 accent-[#2d6a4f]"
             />
             <span className="text-sm" style={{ color: "var(--text-primary)" }}>
@@ -488,35 +517,43 @@ export function TravelPreferencesForm({
             </span>
           </label>
         </div>
+        {!hasWeatherSelection && (
+          <p className="text-xs mt-2" style={{ color: "#b91c1c" }}>
+            Choose at least one option, or tap None.
+          </p>
+        )}
       </div>
 
       <div className="mb-6">
         <p className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
-          What best describes most of your trips?
+          What best describes most of your trips? (required)
         </p>
         <div className="flex flex-wrap gap-2">
           {TRAVEL_VIBES.map((vibe) => (
-            <label
+            <button
               key={vibe}
+              type="button"
               className="flex items-center gap-2 cursor-pointer rounded-full px-3 py-1.5 border transition-colors"
               style={{
                 borderColor: value.travel_vibe === vibe ? "var(--accent-green)" : "var(--border)",
                 background: value.travel_vibe === vibe ? "var(--accent-green-light)" : "transparent",
                 color: value.travel_vibe === vibe ? "var(--accent-green)" : "var(--text-primary)",
               }}
+              onClick={() =>
+                update({
+                  travel_vibe: value.travel_vibe === vibe ? undefined : vibe,
+                })
+              }
             >
-              <input
-                type="radio"
-                name="travel_vibe"
-                value={vibe}
-                checked={value.travel_vibe === vibe}
-                onChange={() => update({ travel_vibe: vibe })}
-                className="sr-only"
-              />
               <span className="text-sm">{vibe}</span>
-            </label>
+            </button>
           ))}
         </div>
+        {!hasVibeSelection && (
+          <p className="text-xs mt-2" style={{ color: "#b91c1c" }}>
+            Pick one vibe before continuing.
+          </p>
+        )}
       </div>
 
       <div>
