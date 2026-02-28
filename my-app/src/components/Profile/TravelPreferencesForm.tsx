@@ -406,7 +406,7 @@ export function TravelPreferencesForm({
         requireDragToActivate={requireDragToActivate}
         label="How much do crowds bother you?"
         left="Hate crowds"
-        right="Don't mind crowds"
+        right="Love crowds"
         value={value.crowd_comfort}
         onChange={(v) => update({ crowd_comfort: v })}
         onActivated={handleSliderActivated}
@@ -433,7 +433,7 @@ export function TravelPreferencesForm({
         requireDragToActivate={requireDragToActivate}
         label="How much walking or physical activity per day is comfortable?"
         left="Minimal walking"
-        right="Long walks / hikes are fine"
+        right="Long walks / hikes"
         value={value.walking_effort}
         onChange={(v) => update({ walking_effort: v })}
         onActivated={handleSliderActivated}

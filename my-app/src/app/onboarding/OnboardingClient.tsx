@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useProfile } from "@/hooks/useProfile";
 import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
 import {
@@ -32,7 +32,7 @@ export function OnboardingClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const forceShow = searchParams.get("force") === "1";
-  const { status: sessionStatus } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const { profile, loading, load, savePreferences } = useProfile();
   const [travel, setTravel] = useState<TravelPreferences>(DEFAULT_TRAVEL_PREFERENCES);
   const [hasEditedTravel, setHasEditedTravel] = useState(false);
@@ -105,6 +105,46 @@ export function OnboardingClient() {
       className="min-h-screen flex items-center justify-center p-4"
       style={{ background: "var(--bg-primary)" }}
     >
+      <div className="fixed top-3 right-3 z-50">
+        <div
+          className="rounded-lg border p-2 text-xs"
+          style={{ background: "var(--bg-surface)", borderColor: "var(--border)" }}
+        >
+          <div className="flex items-center gap-2">
+            {session?.user?.image ? (
+              <img
+                src={session.user.image}
+                alt={session.user.name || "user avatar"}
+                className="w-6 h-6 rounded-full border"
+                style={{ borderColor: "var(--border)" }}
+              />
+            ) : (
+              <div
+                className="w-6 h-6 rounded-full border"
+                style={{ borderColor: "var(--border)", background: "var(--bg-primary)" }}
+              />
+            )}
+            <div className="leading-tight">
+              <p className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {session?.user?.name ?? "User"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="mt-2 w-full rounded-md border px-2 py-1 text-xs font-medium"
+            style={{
+              color: "#991b1b",
+              background: "#fee2e2",
+              borderColor: "#fecaca",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+
       <div
         className="w-full max-w-lg rounded-2xl p-8 shadow-lg border"
         style={{
