@@ -13,7 +13,7 @@ export const ParsePrefsSchema = z.object({
 
 export const CarbonRequestSchema = z.object({
   itinerary: z.object({
-    id: z.string().uuid(),
+    id: z.string().min(1).max(100),
     city: z.string().min(1).max(100),
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
