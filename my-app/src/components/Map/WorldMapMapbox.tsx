@@ -41,6 +41,7 @@ export default function WorldMapMapbox({
     );
   }
 
+  // Markers are react-map-gl <Marker> with latitude/longitude only — no CSS top/left; they stay pinned to coordinates.
   return (
     <Map
       initialViewState={{ longitude: 0, latitude: 20, zoom: 2 }}
@@ -54,6 +55,7 @@ export default function WorldMapMapbox({
           key={city.name}
           longitude={city.lng}
           latitude={city.lat}
+          anchor="center"
           onClick={(e: { originalEvent: { stopPropagation: () => void } }) => {
             e.originalEvent.stopPropagation();
             onCitySelect(city);
