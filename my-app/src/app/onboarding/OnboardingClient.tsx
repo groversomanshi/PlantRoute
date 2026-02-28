@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useProfile } from "@/hooks/useProfile";
 import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
 import {
@@ -29,15 +29,24 @@ function mergeTravel(
 
 export function OnboardingClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const forceShow = searchParams.get("force") === "1";
   const { profile, loading, load, savePreferences } = useProfile();
   const [travel, setTravel] = useState<TravelPreferences>(DEFAULT_TRAVEL_PREFERENCES);
   const [saving, setSaving] = useState(false);
+  const [allSlidersActivated, setAllSlidersActivated] = useState(false);
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
+    if (forceShow) {
+      if (profile?.preferences?.travel) {
+        setTravel({ ...DEFAULT_TRAVEL_PREFERENCES, ...profile.preferences.travel });
+      }
+      return;
+    }
     if (profile?.preferences?.travel) {
       if (profile.preferences.travel.completed) {
         router.replace("/");
@@ -45,7 +54,7 @@ export function OnboardingClient() {
       }
       setTravel({ ...DEFAULT_TRAVEL_PREFERENCES, ...profile.preferences.travel });
     }
-  }, [profile, router]);
+  }, [profile, router, forceShow]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,11 +106,18 @@ export function OnboardingClient() {
             value={travel}
             onChange={setTravel}
             showTitle={false}
+            requireDragToActivate={true}
+            onAllSlidersActivated={() => setAllSlidersActivated(true)}
           />
+          {!allSlidersActivated && (
+            <p className="mt-4 text-xs text-center" style={{ color: "var(--text-muted)" }}>
+              Drag each point left or right to set your preference — then Continue will unlock.
+            </p>
+          )}
           <button
             type="submit"
-            disabled={saving}
-            className="mt-8 w-full py-3 rounded-xl font-medium text-white disabled:opacity-60"
+            disabled={saving || !allSlidersActivated}
+            className="mt-6 w-full py-3 rounded-xl font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ background: "#2d6a4f" }}
           >
             {saving ? "Saving…" : "Continue"}
