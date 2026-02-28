@@ -4,6 +4,13 @@ import type { TravelPreferences } from "@/types";
 import { TRAVEL_VIBES } from "@/types";
 
 const SLIDER_STEPS = 101; // 0, 0.01, ..., 1
+const SCALE_MIN = 1;
+const SCALE_MAX = 5;
+
+/** Value 0–1 to display scale 1–5 */
+function valueToScale(value: number): number {
+  return Math.round(SCALE_MIN + value * (SCALE_MAX - SCALE_MIN));
+}
 
 interface SliderRowProps {
   label: string;
@@ -14,6 +21,7 @@ interface SliderRowProps {
 }
 
 function SliderRow({ label, left, right, value, onChange }: SliderRowProps) {
+  const scale = valueToScale(value);
   return (
     <div className="mb-6">
       <p className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
@@ -32,9 +40,20 @@ function SliderRow({ label, left, right, value, onChange }: SliderRowProps) {
           onChange={(e) => onChange(Number(e.target.value) / (SLIDER_STEPS - 1))}
           className="travel-pref-slider flex-1 h-2 rounded-full appearance-none cursor-pointer"
         />
+        <span
+          className="text-sm font-medium tabular-nums shrink-0 w-8 text-center"
+          style={{ color: "var(--accent-green)" }}
+          aria-hidden
+        >
+          {scale}
+        </span>
         <span className="text-xs w-24 shrink-0 text-right" style={{ color: "var(--text-muted)" }}>
           {right}
         </span>
+      </div>
+      <div className="flex justify-between mt-1 px-1">
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>{SCALE_MIN}</span>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>{SCALE_MAX}</span>
       </div>
     </div>
   );
