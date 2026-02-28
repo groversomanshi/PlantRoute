@@ -17,12 +17,19 @@ export function Header() {
       </Link>
       {session ? (
         <>
-          <img
-            src={session.user?.image ?? ""}
-            alt=""
-            className="w-8 h-8 rounded-full border-2"
-            style={{ borderColor: "var(--border)" }}
-          />
+          {session.user?.image ? (
+            <img
+              src={session.user.image}
+              alt={session.user.name || "user avatar"}
+              className="w-8 h-8 rounded-full border-2"
+              style={{ borderColor: "var(--border)" }}
+            />
+          ) : (
+            <div
+              className="w-8 h-8 rounded-full border-2 bg-gray-300"
+              style={{ borderColor: "var(--border)" }}
+            />
+          )}
           <span className="text-sm hidden sm:inline" style={{ color: "var(--text-primary)" }}>
             {session.user?.name}
           </span>
