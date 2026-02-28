@@ -47,7 +47,7 @@ export default function SignInPage() {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={() => signIn("google", { callbackUrl: "/" })}
+          onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
           className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-white font-medium"
           style={{ background: "#2d6a4f" }}
         >

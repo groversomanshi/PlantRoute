@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useProfile } from "@/hooks/useProfile";
-import type { UserPreferences } from "@/types";
+import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
+import { DEFAULT_TRAVEL_PREFERENCES, type UserPreferences } from "@/types";
 
 const STORAGE_KEY = "plantroute_itineraries";
 
@@ -19,7 +20,13 @@ export default function ProfileClient() {
 
   useEffect(() => {
     if (profile) {
-      setPreferences(profile.preferences);
+      const prefs = profile.preferences;
+      setPreferences({
+        ...prefs,
+        travel: prefs.travel
+          ? { ...DEFAULT_TRAVEL_PREFERENCES, ...prefs.travel }
+          : DEFAULT_TRAVEL_PREFERENCES,
+      });
     }
   }, [profile]);
 
@@ -59,6 +66,19 @@ export default function ProfileClient() {
       <h1 className="text-2xl font-display font-semibold mb-6" style={{ color: "var(--text-primary)" }}>
         Your profile
       </h1>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-medium mb-3" style={{ color: "var(--text-primary)" }}>
+          Travel Preferences
+        </h2>
+        <TravelPreferencesForm
+          value={preferences?.travel ?? DEFAULT_TRAVEL_PREFERENCES}
+          onChange={(travel) =>
+            setPreferences((prev) => (prev ? { ...prev, travel } : null))
+          }
+          showTitle={false}
+        />
+      </section>
 
       <section className="mb-8">
         <h2 className="text-lg font-medium mb-3" style={{ color: "var(--text-primary)" }}>
