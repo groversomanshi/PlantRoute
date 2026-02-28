@@ -92,6 +92,7 @@ export async function withRateLimit(
 export const RATE_LIMITS = {
   parsePrefs: { ipLimit: 20, userLimit: 10, windowSeconds: 60 },
   carbon: { ipLimit: 30, userLimit: 20, windowSeconds: 60 },
+  regret: { ipLimit: 30, userLimit: 20, windowSeconds: 60 },
   amadeus: { ipLimit: 40, userLimit: 30, windowSeconds: 60 },
   supermemory: { ipLimit: 20, userLimit: 15, windowSeconds: 60 },
 } as const;

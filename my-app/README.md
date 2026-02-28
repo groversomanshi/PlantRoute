@@ -30,13 +30,15 @@ Build travel itineraries with carbon impact. Pick a destination on the map, desc
    Open [http://localhost:3000](http://localhost:3000).
 
 4. **Modal (optional)**  
-   To run the Python carbon predictor on Modal:
+   To deploy regret inference and/or the carbon predictor on Modal (run from `my-app/`):
    ```bash
    pip install modal
    modal token set
-   modal deploy modal/carbon_predictor.py
+   modal deploy modal_apps/preference_engine.py
+   modal deploy modal_apps/regret_protection_engine.py
+   modal deploy modal_apps/carbon_predictor.py
    ```
-   Set `MODAL_TOKEN` and, if needed, `MODAL_CARBON_URL` to your Modal function URL.
+   Use `modal deploy` (not `modal run`) — it deploys the web endpoints. Copy the URLs shown into `.env.local` as `MODAL_PREFERENCE_URL`, `MODAL_REGRET_URL`, `MODAL_CARBON_URL`, and set `MODAL_TOKEN`.
 
 ## Deploy
 
@@ -50,7 +52,7 @@ Build travel itineraries with carbon impact. Pick a destination on the map, desc
 - `src/components` — Map (WorldMap, CityModal), Itinerary (builder, cards), UI (CarbonBadge, RegretModal, etc.).
 - `src/lib` — Utilities: carbon (local predictor), haversine, itinerary-builder, interest-scorer, Amadeus/Gemini/Supermemory wrappers, validation, rate limiting.
 - `src/types` — Shared TypeScript types.
-- `modal` — Modal Python app for carbon prediction (optional).
+- `modal_apps` — Modal Python apps (preference_engine, regret_protection_engine, carbon_predictor). Named `modal_apps` to avoid shadowing the `modal` package.
 
 ## Features
 

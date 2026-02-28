@@ -2,6 +2,7 @@
 PlantRoute carbon calculation app for Modal.
 Deterministic CO2 calculation using Haversine distance and fixed emission factors.
 No LLMs or external API calls.
+Deploy from my-app: modal deploy modal_apps/carbon_predictor.py
 """
 import json
 import math
@@ -207,7 +208,6 @@ def optimize_alternatives(itinerary_json: dict, user_prefs: dict) -> dict:
 
 
 if __name__ == "__main__":
-    # Sample: Paris to Rome — one flight, one museum, one hotel night
     sample = {
         "id": "test-1",
         "city": "Rome",

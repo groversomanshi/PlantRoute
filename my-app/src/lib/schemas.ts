@@ -94,3 +94,52 @@ export const SupermemoryRetrieveQuerySchema = z.object({
   userId: z.string().min(1).max(200),
   type: z.enum(["preferences", "trip"]),
 });
+
+// Regret prediction (preference_engine / regret_protection_engine) — matches Python schemas
+const travelVibeSchema = z.enum(["Chill", "Adventure", "Family", "Romantic", "Nightlife"]);
+
+export const RegretUserPreferencesSchema = z.object({
+  pace: z.number().min(0).max(1).default(0.5),
+  crowd_comfort: z.number().min(0).max(1).default(0.5),
+  morning_tolerance: z.number().min(0).max(1).default(0.5),
+  late_night_tolerance: z.number().min(0).max(1).default(0.5),
+  walking_effort: z.number().min(0).max(1).default(0.5),
+  budget_comfort: z.number().min(0).max(1).default(0.5),
+  planning_vs_spontaneity: z.number().min(0).max(1).default(0.5),
+  noise_sensitivity: z.number().min(0).max(1).default(0.5),
+  dislike_heat: z.boolean().default(false),
+  dislike_cold: z.boolean().default(false),
+  dislike_rain: z.boolean().default(false),
+  travel_vibe: travelVibeSchema.default("Chill"),
+  additional_notes: z.string().max(2000).optional(),
+});
+
+export const RegretItineraryItemSchema = z.object({
+  start_hour: z.number().min(0).max(24).default(12),
+  end_hour: z.number().min(0).max(24).optional(),
+  duration_hours: z.number().min(0).max(24).optional(),
+  walking_km: z.number().min(0).max(50).default(0),
+  walking_km_cumulative_day: z.number().min(0).max(50).optional(),
+  crowd_level: z.number().min(0).max(1).default(0.5),
+  outdoor_fraction: z.number().min(0).max(1).default(0.5),
+  activity_count_today: z.number().int().min(0).max(20).default(1),
+  cost_level: z.number().min(0).max(1).default(0.5),
+  day_number: z.number().int().min(1).max(30).default(1),
+  is_late_night: z.boolean().default(false),
+  is_must_see: z.boolean().default(false),
+  bad_weather_today: z.boolean().optional(),
+});
+
+export const RegretContextSchema = z.object({
+  previous_day_walking_km: z.number().min(0).max(50).optional(),
+  previous_day_end_hour: z.number().min(0).max(24).optional(),
+  sleep_window_start_hour: z.number().min(0).max(24).optional(),
+  sleep_window_end_hour: z.number().min(0).max(24).optional(),
+  recent_pace_score: z.number().min(0).max(1).optional(),
+});
+
+export const RegretRequestSchema = z.object({
+  user_preferences: RegretUserPreferencesSchema,
+  itinerary_item: RegretItineraryItemSchema,
+  context: RegretContextSchema.optional(),
+});

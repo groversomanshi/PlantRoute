@@ -1,0 +1,23 @@
+{
+  "feature_columns": [
+    "pace_overage",
+    "walk_over_tolerance_km",
+    "early_start_violation",
+    "crowd_mismatch",
+    "budget_overrun",
+    "outdoor_bad_weather",
+    "late_night_after_early",
+    "noise_mismatch",
+    "spontaneity_mismatch",
+    "_start_hour_norm",
+    "_walk_km_norm",
+    "_activities_norm",
+    "_pace",
+    "_crowd_comfort",
+    "_morning_tolerance",
+    "_budget_comfort"
+  ],
+  "n_samples": 3000,
+  "val_accuracy": 1.0,
+  "val_roc_auc": 1.0
+}
