@@ -68,10 +68,17 @@ export function buildCandidateItineraries(
     activityList: Activity[],
     maxPerDay: number
   ): void => {
+    if (activityList.length === 0) return;
+    const dayCount = days.length;
+    const totalSlots = dayCount * maxPerDay;
+    const cycled: Activity[] = [];
+    for (let i = 0; i < totalSlots; i++) {
+      cycled.push(activityList[i % activityList.length]);
+    }
     let idx = 0;
     for (const day of days) {
-      for (let j = 0; j < maxPerDay && idx < activityList.length; j++) {
-        day.activities.push(activityList[idx]);
+      for (let j = 0; j < maxPerDay; j++) {
+        day.activities.push(cycled[idx]);
         idx++;
       }
     }

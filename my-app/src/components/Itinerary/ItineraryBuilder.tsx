@@ -7,6 +7,7 @@ import type { GeoPoint } from "@/types";
 import type { Itinerary, UserPreferences } from "@/types";
 import { buildCandidateItineraries } from "@/lib/itinerary-builder";
 import { scoreItinerary } from "@/lib/interest-scorer";
+import { applyCarbonResult } from "@/lib/apply-carbon";
 import { geocodeCity } from "@/lib/cities";
 import { ItineraryCard } from "./ItineraryCard";
 import { RegretModal } from "@/components/UI/RegretModal";
@@ -113,9 +114,10 @@ export function ItineraryBuilder({
         if (carbonRes.ok) {
           const carbonData = await carbonRes.json();
           const totalKg = carbonData.total_kg ?? 0;
+          const items = carbonData.items ?? [];
+          const merged = applyCarbonResult(it, { items, total_kg: totalKg });
           withCarbon.push({
-            ...it,
-            total_emission_kg: totalKg,
+            ...merged,
             interest_match_score: scoreItinerary(it, prefs),
           });
         } else {
