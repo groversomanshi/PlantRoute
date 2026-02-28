@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import Map, { Marker } from "react-map-gl/mapbox";
+import "mapbox-gl/dist/mapbox-gl.css";
 import type { GeoPoint } from "@/types";
 
 interface WorldMapMapboxProps {
@@ -13,16 +15,6 @@ export default function WorldMapMapbox({
   cities,
   onCitySelect,
 }: WorldMapMapboxProps) {
-  const [Map, setMap] = useState<React.ComponentType<Record<string, unknown>> | null>(null);
-  const [Marker, setMarker] = useState<React.ComponentType<Record<string, unknown>> | null>(null);
-
-  useEffect(() => {
-    import("react-map-gl/mapbox").then((mod) => {
-      setMap(() => mod.default as React.ComponentType<Record<string, unknown>>);
-      setMarker(() => mod.Marker as unknown as React.ComponentType<Record<string, unknown>>);
-    });
-  }, []);
-
   const handleClick = useCallback(
     (e: { lngLat: { lng: number; lat: number } }) => {
       const city = cities.find(
@@ -33,15 +25,6 @@ export default function WorldMapMapbox({
     [cities, onCitySelect]
   );
 
-  if (!Map || !Marker) {
-    return (
-      <div className="w-full h-full min-h-screen flex items-center justify-center" style={{ background: "var(--bg-primary)" }}>
-        <p style={{ color: "var(--text-muted)" }}>Loading map…</p>
-      </div>
-    );
-  }
-
-  // Markers are react-map-gl <Marker> with latitude/longitude only — no CSS top/left; they stay pinned to coordinates.
   return (
     <Map
       initialViewState={{ longitude: 0, latitude: 20, zoom: 2 }}
