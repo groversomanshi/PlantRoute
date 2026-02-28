@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getPreferenceByUserId } from "@/lib/preference-db";
 import ProfileClient from "./ProfileClient";
 
 export default async function ProfilePage() {
@@ -12,6 +13,12 @@ export default async function ProfilePage() {
     redirect("/signin");
   }
   if (!session) redirect("/signin");
+  const userId = (session.user as { id?: string }).id;
+  if (!userId) redirect("/signin");
+
+  const pref = await getPreferenceByUserId(userId);
+  const completed = pref?.preferences?.travel?.completed === true;
+  if (!completed) redirect("/onboarding");
 
   return <ProfileClient />;
 }
