@@ -5,16 +5,26 @@ import Map, { Marker } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { GeoPoint } from "@/types";
 
+const BASEMAP_STYLES = {
+  light: "mapbox://styles/mapbox/light-v11",
+  outdoors: "mapbox://styles/mapbox/outdoors-v12",
+} as const;
+
+type BasemapKey = keyof typeof BASEMAP_STYLES;
+
 interface WorldMapMapboxProps {
   cities: GeoPoint[];
   pastTripCities: string[];
   onCitySelect: (city: GeoPoint) => void;
+  basemap?: BasemapKey;
 }
 
 export default function WorldMapMapbox({
   cities,
   onCitySelect,
+  basemap = "outdoors",
 }: WorldMapMapboxProps) {
+
   const handleClick = useCallback(
     (e: { lngLat: { lng: number; lat: number } }) => {
       const city = cities.find(
@@ -29,7 +39,7 @@ export default function WorldMapMapbox({
     <Map
       initialViewState={{ longitude: 0, latitude: 20, zoom: 2 }}
       style={{ width: "100%", height: "100%" }}
-      mapStyle="mapbox://styles/mapbox/light-v11"
+      mapStyle={BASEMAP_STYLES[basemap]}
       mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ""}
       onClick={handleClick}
     >

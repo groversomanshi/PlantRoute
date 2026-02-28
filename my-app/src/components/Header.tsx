@@ -3,11 +3,40 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 
-export function Header() {
+type BasemapKey = "light" | "outdoors";
+
+interface HeaderProps {
+  useMapbox?: boolean;
+  basemap?: BasemapKey;
+  onBasemapChange?: (key: BasemapKey) => void;
+}
+
+export function Header({ useMapbox = false, basemap = "outdoors", onBasemapChange }: HeaderProps = {}) {
   const { data: session } = useSession();
 
   return (
     <nav className="fixed top-0 right-0 z-50 p-4 flex items-center gap-3">
+      {useMapbox && onBasemapChange && (
+        <div
+          className="flex rounded-lg overflow-hidden border-2"
+          style={{ borderColor: "var(--border)", background: "var(--bg-surface)" }}
+        >
+          {(["light", "outdoors"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onBasemapChange(key)}
+              className="px-3 py-1.5 text-sm font-medium capitalize"
+              style={{
+                color: basemap === key ? "var(--accent-green)" : "var(--text-muted)",
+                background: basemap === key ? "var(--accent-green-light)" : "transparent",
+              }}
+            >
+              {key}
+            </button>
+          ))}
+        </div>
+      )}
       <Link
         href="/profile"
         className="text-sm font-medium py-2 px-3 rounded-lg hover:bg-black/5"

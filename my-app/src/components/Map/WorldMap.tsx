@@ -11,13 +11,19 @@ const CITIES_LIST = Object.values(CITIES);
 
 interface WorldMapProps {
   useMapbox: boolean;
+  basemap?: "light" | "outdoors";
   onCitySelect: (city: GeoPoint) => void;
   pastTripCities?: string[];
 }
 
-export function WorldMap({ useMapbox, onCitySelect, pastTripCities = [] }: WorldMapProps) {
+export function WorldMap({ useMapbox, basemap = "outdoors", onCitySelect, pastTripCities = [] }: WorldMapProps) {
   const content = useMapbox ? (
-    <MapboxMap cities={CITIES_LIST} pastTripCities={pastTripCities} onCitySelect={onCitySelect} />
+    <MapboxMap
+      cities={CITIES_LIST}
+      pastTripCities={pastTripCities}
+      onCitySelect={onCitySelect}
+      basemap={basemap}
+    />
   ) : (
     <LeafletMap cities={CITIES_LIST} pastTripCities={pastTripCities} onCitySelect={onCitySelect} />
   );
