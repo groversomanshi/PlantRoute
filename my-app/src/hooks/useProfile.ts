@@ -13,6 +13,7 @@ export function useProfile() {
   const load = useCallback(async () => {
     if (!userId) {
       setProfile(null);
+      setLoading(false);
       return;
     }
     setLoading(true);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useProfile } from "@/hooks/useProfile";
 import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
 import {
@@ -31,41 +32,61 @@ export function OnboardingClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const forceShow = searchParams.get("force") === "1";
+  const { status: sessionStatus } = useSession();
   const { profile, loading, load, savePreferences } = useProfile();
   const [travel, setTravel] = useState<TravelPreferences>(DEFAULT_TRAVEL_PREFERENCES);
+  const [hasEditedTravel, setHasEditedTravel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [allSlidersActivated, setAllSlidersActivated] = useState(false);
+  const [selectionComplete, setSelectionComplete] = useState(false);
+  const [hasCheckedProfile, setHasCheckedProfile] = useState(false);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (forceShow) {
-      if (profile?.preferences?.travel) {
-        setTravel({ ...DEFAULT_TRAVEL_PREFERENCES, ...profile.preferences.travel });
-      }
-      return;
-    }
-    if (profile?.preferences?.travel) {
-      if (profile.preferences.travel.completed) {
-        router.replace("/");
+    async function bootstrap() {
+      if (sessionStatus !== "authenticated") {
+        setHasCheckedProfile(sessionStatus === "unauthenticated");
         return;
       }
-      setTravel({ ...DEFAULT_TRAVEL_PREFERENCES, ...profile.preferences.travel });
+      setHasCheckedProfile(false);
+      await load();
+      if (!cancelled) setHasCheckedProfile(true);
     }
-  }, [profile, router, forceShow]);
+
+    void bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, load]);
+
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !hasCheckedProfile || loading) return;
+    if (!forceShow && profile?.preferences?.travel?.completed) {
+      router.replace("/");
+      return;
+    }
+  }, [sessionStatus, hasCheckedProfile, loading, profile, router, forceShow]);
+
+  const effectiveTravel =
+    !hasEditedTravel && profile?.preferences?.travel
+      ? { ...DEFAULT_TRAVEL_PREFERENCES, ...profile.preferences.travel }
+      : travel;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const prefs = mergeTravel(profile?.preferences ?? null, travel);
+    const prefs = mergeTravel(profile?.preferences ?? null, effectiveTravel);
     const result = await savePreferences(prefs);
     setSaving(false);
     if (result.success) router.replace("/");
   };
 
-  if (loading && !profile) {
+  const sessionLoading = sessionStatus === "loading";
+  const profileLoading =
+    sessionStatus === "authenticated" && (!hasCheckedProfile || loading);
+  if (sessionLoading || profileLoading) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
@@ -74,6 +95,9 @@ export function OnboardingClient() {
         <p style={{ color: "var(--text-muted)" }}>Loading…</p>
       </div>
     );
+  }
+  if (sessionStatus === "authenticated" && profile?.preferences?.travel?.completed && !forceShow) {
+    return null;
   }
 
   return (
@@ -94,7 +118,7 @@ export function OnboardingClient() {
             className="text-2xl font-display font-semibold mb-1"
             style={{ color: "var(--text-primary)" }}
           >
-            Set your travel preferences
+            Set your travel preferences (1 - 5)
           </h1>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             We’ll use these to tailor your itineraries. You can change them anytime in Profile.
@@ -103,8 +127,12 @@ export function OnboardingClient() {
 
         <form onSubmit={handleSubmit}>
           <TravelPreferencesForm
-            value={travel}
-            onChange={setTravel}
+            value={effectiveTravel}
+            onChange={(next) => {
+              setHasEditedTravel(true);
+              setTravel(next);
+            }}
+            onValidationChange={({ isComplete }) => setSelectionComplete(isComplete)}
             showTitle={false}
             requireDragToActivate={true}
             onAllSlidersActivated={() => setAllSlidersActivated(true)}
@@ -114,9 +142,14 @@ export function OnboardingClient() {
               Drag each point left or right to set your preference — then Continue will unlock.
             </p>
           )}
+          {allSlidersActivated && !selectionComplete && (
+            <p className="mt-4 text-xs text-center" style={{ color: "var(--text-muted)" }}>
+              Complete the required Weather dislikes and Trip vibe sections to continue.
+            </p>
+          )}
           <button
             type="submit"
-            disabled={saving || !allSlidersActivated}
+            disabled={saving || !allSlidersActivated || !selectionComplete}
             className="mt-6 w-full py-3 rounded-xl font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ background: "#2d6a4f" }}
           >
