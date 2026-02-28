@@ -106,6 +106,7 @@ def carbon_predictor(itinerary_json: dict) -> dict:
                     "bus": BUS_FACTOR,
                     "car": CAR_FACTOR,
                     "ferry": FERRY_FACTOR,
+                    "walk": 0.0,
                 }
                 factor = factors.get(mode, CAR_FACTOR)
                 emission_kg = dist_km * factor

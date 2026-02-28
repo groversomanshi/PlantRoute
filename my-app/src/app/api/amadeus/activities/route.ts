@@ -12,8 +12,18 @@ async function enrichActivityWithImage(
   activity: Activity,
   city: string
 ): Promise<Activity> {
-  const query = `${activity.name} ${activity.category} ${city}`.trim();
-  const image_url = await getUnsplashImageUrl(query);
+  const queries = [
+    `${activity.name} ${activity.category} ${city}`.trim(),
+    `${activity.name} ${city}`.trim(),
+    `${activity.category} ${city}`.trim(),
+    `${city} travel`.trim(),
+  ];
+  let image_url: string | undefined;
+  for (const q of queries) {
+    if (!q) continue;
+    image_url = await getUnsplashImageUrl(q);
+    if (image_url) break;
+  }
   return { ...activity, image_url };
 }
 

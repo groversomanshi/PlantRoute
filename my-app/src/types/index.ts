@@ -4,7 +4,8 @@ export type TransportMode =
   | "train"
   | "bus"
   | "car"
-  | "ferry";
+  | "ferry"
+  | "walk";
 
 export interface GeoPoint {
   lat: number;

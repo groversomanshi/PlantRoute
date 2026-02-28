@@ -3,7 +3,7 @@
 import type { TransportSegment } from "@/types";
 import { CarbonBadge } from "@/components/UI/CarbonBadge";
 import { formatPrice } from "@/lib/utils";
-import { Plane, Train, Bus, Car, Ship } from "lucide-react";
+import { Plane, Train, Bus, Car, Ship, Footprints } from "lucide-react";
 
 const modeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   flight_short: Plane,
@@ -12,6 +12,7 @@ const modeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   bus: Bus,
   car: Car,
   ferry: Ship,
+  walk: Footprints,
 };
 
 interface TransportCardProps {

@@ -11,6 +11,7 @@ export const EMISSION_FACTORS: Record<string, number> = {
   bus: 0.08,
   car: 0.2,
   ferry: 0.12,
+  walk: 0,
 };
 
 export const RADIATIVE_FORCING_MULTIPLIER = 1.9;

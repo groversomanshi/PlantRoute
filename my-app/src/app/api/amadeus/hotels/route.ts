@@ -5,7 +5,15 @@ import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { geocodeCity } from "@/lib/cities";
 import { createAmadeusClient } from "@/lib/amadeus";
 import { MOCK_HOTELS } from "@/lib/mocks";
+import { HOTEL_FACTOR_PER_NIGHT } from "@/lib/carbon";
 import type { Hotel } from "@/types";
+
+/** Estimate emission: lower stars = simpler = lower carbon proxy. 15 kg base, -2 per star below 5. */
+function estimateHotelEmission(stars: number): number {
+  const base = HOTEL_FACTOR_PER_NIGHT;
+  const reduction = Math.max(0, (5 - stars) * 2);
+  return Math.max(8, base - reduction);
+}
 
 export async function GET(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.amadeus, null);
@@ -29,8 +37,12 @@ export async function GET(req: NextRequest) {
       ...h,
       id: `mock-hotel-${city}-${i}`,
       location: { ...point, name: city },
+      emission_kg_per_night: estimateHotelEmission(h.stars),
     }));
-    return NextResponse.json({ hotels });
+    const sorted = [...hotels].sort(
+      (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
+    );
+    return NextResponse.json({ hotels: sorted });
   }
 
   try {
@@ -46,8 +58,12 @@ export async function GET(req: NextRequest) {
         ...h,
         id: `fallback-${city}-${i}`,
         location: { ...point, name: city },
+        emission_kg_per_night: estimateHotelEmission(h.stars),
       }));
-      return NextResponse.json({ hotels });
+      const sorted = [...hotels].sort(
+        (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
+      );
+      return NextResponse.json({ hotels: sorted });
     }
     const offers = await amadeus.shopping.hotelOffersSearch.get({
       hotelIds,
@@ -60,21 +76,30 @@ export async function GET(req: NextRequest) {
     const nights = Math.max(1, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (24 * 60 * 60 * 1000)));
     const hotels: Hotel[] = offersData.slice(0, 10).map((o, i) => {
       const total = parseFloat(o.offers?.[0]?.price?.total ?? "0") || 100 * nights;
+      const stars = 4;
       return {
         id: o.hotel?.id ?? `amadeus-hotel-${i}`,
         name: o.hotel?.name ?? "Hotel",
         location: { ...point, name: city },
         price_per_night_usd: total / nights,
-        stars: 4,
+        stars,
+        emission_kg_per_night: estimateHotelEmission(stars),
       };
     });
-    return NextResponse.json({ hotels });
+    const sorted = [...hotels].sort(
+      (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
+    );
+    return NextResponse.json({ hotels: sorted });
   } catch {
     const hotels: Hotel[] = MOCK_HOTELS.map((h, i) => ({
       ...h,
       id: `fallback-${city}-${i}`,
       location: { ...point, name: city },
+      emission_kg_per_night: estimateHotelEmission(h.stars),
     }));
-    return NextResponse.json({ hotels });
+    const sorted = [...hotels].sort(
+      (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
+    );
+    return NextResponse.json({ hotels: sorted });
   }
 }

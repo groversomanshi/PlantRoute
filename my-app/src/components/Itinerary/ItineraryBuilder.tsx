@@ -1,16 +1,26 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import type { GeoPoint } from "@/types";
-import type { Itinerary, UserPreferences } from "@/types";
-import { buildCandidateItineraries } from "@/lib/itinerary-builder";
+import type {
+  Itinerary,
+  UserPreferences,
+  Hotel,
+  Activity,
+  ItineraryDay,
+  TransportSegment,
+} from "@/types";
 import { scoreItinerary } from "@/lib/interest-scorer";
 import { applyCarbonResult } from "@/lib/apply-carbon";
 import { geocodeCity } from "@/lib/cities";
-import { ItineraryCard } from "./ItineraryCard";
+import { getCityIata } from "@/lib/airport-coords";
+import { HotelSelector } from "./HotelSelector";
+import { ActivitySelector } from "./ActivitySelector";
+import { TravelOptionsPanel } from "./TravelOptionsPanel";
 import { RegretModal } from "@/components/UI/RegretModal";
+import { formatDate } from "@/lib/utils";
 
 const STORAGE_KEY = "plantroute_itineraries";
 
@@ -29,13 +39,33 @@ export function ItineraryBuilder({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [prefText, setPrefText] = useState(initialPreferences?.raw_text ?? "");
-  const [preferences, setPreferences] = useState<UserPreferences | null>(initialPreferences ?? null);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(
+    initialPreferences ?? null
+  );
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [dailyPlan, setDailyPlan] = useState<ItineraryDay[]>([]);
+  const [arrivalOptions, setArrivalOptions] = useState<TransportSegment[]>([]);
+  const [departureOptions, setDepartureOptions] = useState<TransportSegment[]>(
+    []
+  );
+  const [selectedArrival, setSelectedArrival] =
+    useState<TransportSegment | null>(null);
+  const [selectedDeparture, setSelectedDeparture] =
+    useState<TransportSegment | null>(null);
+  const [loadingHotels, setLoadingHotels] = useState(false);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [loadingFlights, setLoadingFlights] = useState(false);
   const [building, setBuilding] = useState(false);
-  const [buildStatus, setBuildStatus] = useState("");
-  const [candidates, setCandidates] = useState<Itinerary[]>([]);
+  const [finalItinerary, setFinalItinerary] = useState<Itinerary | null>(null);
   const [regretItinerary, setRegretItinerary] = useState<Itinerary | null>(null);
 
   const cityName = city.name.split(",")[0]?.trim() ?? city.name;
+  const destIata = getCityIata(cityName);
 
   const parsePrefs = useCallback(async () => {
     const text = prefText.replace(/<[^>]*>/g, "").trim().slice(0, 2000);
@@ -51,114 +81,196 @@ export function ItineraryBuilder({
     setPreferences(data.preferences ?? null);
   }, [prefText]);
 
-  const runBuild = useCallback(async () => {
-    setBuilding(true);
-    setBuildStatus("Fetching activities…");
-    const prefs: UserPreferences = preferences ?? {
-      interests: ["culture", "outdoor"],
-      budget_level: "mid",
-      carbon_sensitivity: "medium",
-      avoid_flying: false,
-      party_size: 1,
-    };
+  const prefs: UserPreferences = preferences ?? {
+    interests: ["culture", "outdoor"],
+    budget_level: "mid",
+    carbon_sensitivity: "medium",
+    avoid_flying: false,
+    party_size: 1,
+  };
 
-    try {
-      const point = await geocodeCity(cityName);
-      const cityPoint = point ?? city;
-
-      setBuildStatus("Fetching activities…");
-      const activitiesRes = await fetch(
-        `/api/amadeus/activities?city=${encodeURIComponent(cityName)}&interests=${encodeURIComponent(prefs.interests.join(","))}&limit=20`,
-        { signal: AbortSignal.timeout(10000) }
-      );
-      const activitiesData = await activitiesRes.json();
-      const activities = activitiesData.activities ?? [];
-
-      setBuildStatus("Fetching hotels…");
-      const hotelsRes = await fetch(
+  useEffect(() => {
+    if (step === 3 && startDate && endDate) {
+      setLoadingHotels(true);
+      fetch(
         `/api/amadeus/hotels?city=${encodeURIComponent(cityName)}&checkIn=${startDate}&checkOut=${endDate}`,
         { signal: AbortSignal.timeout(10000) }
-      );
-      const hotelsData = await hotelsRes.json();
-      const hotels = hotelsData.hotels ?? [];
+      )
+        .then((r) => r.json())
+        .then((d) => setHotels(d.hotels ?? []))
+        .catch(() => setHotels([]))
+        .finally(() => setLoadingHotels(false));
+    }
+  }, [step, cityName, startDate, endDate]);
 
-      setBuildStatus("Fetching transport…");
-      const flightsRes = await fetch(
-        `/api/amadeus/flights?origin=ORD&destination=${cityName.slice(0, 3).toUpperCase()}&date=${startDate}&adults=1`,
+  const interestsParam = (preferences?.interests ?? ["culture", "outdoor"]).join(",");
+
+  useEffect(() => {
+    if (step === 4) {
+      setLoadingActivities(true);
+      fetch(
+        `/api/amadeus/activities?city=${encodeURIComponent(cityName)}&interests=${encodeURIComponent(interestsParam)}&limit=20`,
         { signal: AbortSignal.timeout(10000) }
-      );
-      const flightsData = await flightsRes.json();
-      const flights = flightsData.flights ?? [];
+      )
+        .then((r) => r.json())
+        .then((d) => setActivities(d.activities ?? []))
+        .catch(() => setActivities([]))
+        .finally(() => setLoadingActivities(false));
+    }
+  }, [step, cityName, interestsParam]);
 
-      setBuildStatus("Building your routes…");
-      const rawCandidates = buildCandidateItineraries(
-        cityName,
-        cityPoint,
+  useEffect(() => {
+    if (step === 6 && startDate && endDate) {
+      setLoadingFlights(true);
+      Promise.all([
+        fetch(
+          `/api/amadeus/flights?origin=ORD&destination=${destIata}&date=${startDate}&adults=1`,
+          { signal: AbortSignal.timeout(10000) }
+        ).then((r) => r.json()),
+        fetch(
+          `/api/amadeus/flights?origin=${destIata}&destination=ORD&date=${endDate}&adults=1`,
+          { signal: AbortSignal.timeout(10000) }
+        ).then((r) => r.json()),
+      ])
+        .then(([arr, dep]) => {
+          setArrivalOptions(arr.flights ?? []);
+          setDepartureOptions(dep.flights ?? []);
+        })
+        .catch(() => {
+          setArrivalOptions([]);
+          setDepartureOptions([]);
+        })
+        .finally(() => setLoadingFlights(false));
+    }
+  }, [step, startDate, endDate, destIata]);
+
+  const handleActivityToggle = useCallback((activity: Activity) => {
+    setSelectedActivityIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(activity.id)) next.delete(activity.id);
+      else next.add(activity.id);
+      return next;
+    });
+  }, []);
+
+  const handleScheduleActivities = useCallback(async () => {
+    if (!selectedHotel || selectedActivityIds.size === 0) return;
+    const selectedActs = activities.filter((a) => selectedActivityIds.has(a.id));
+    const res = await fetch("/api/infer/schedule-activities", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        activities: selectedActs,
         startDate,
         endDate,
-        activities,
-        hotels,
-        flights,
-        prefs
-      );
+        hotel: selectedHotel,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setDailyPlan(data.days ?? []);
+  }, [
+    selectedHotel,
+    selectedActivityIds,
+    activities,
+    startDate,
+    endDate,
+  ]);
 
-      setBuildStatus("Scoring carbon…");
-      const withCarbon: Itinerary[] = [];
-      for (const it of rawCandidates) {
-        const carbonRes = await fetch("/api/infer/carbon", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ itinerary: it }),
-          signal: AbortSignal.timeout(10000),
-        });
-        if (carbonRes.ok) {
-          const carbonData = await carbonRes.json();
-          const totalKg = carbonData.total_kg ?? 0;
-          const items = carbonData.items ?? [];
-          const merged = applyCarbonResult(it, { items, total_kg: totalKg });
-          withCarbon.push({
-            ...merged,
-            interest_match_score: scoreItinerary(it, prefs),
-          });
-        } else {
-          withCarbon.push({ ...it, interest_match_score: scoreItinerary(it, prefs) });
-        }
+  const buildFinalItinerary = useCallback(async () => {
+    if (!selectedHotel || dailyPlan.length === 0) return;
+    setBuilding(true);
+    setStep(7);
+    try {
+      const days: ItineraryDay[] = dailyPlan.map((d, i) => ({
+        ...d,
+        transport: [...d.transport],
+      }));
+      if (selectedArrival && days.length > 0) {
+        days[0].transport.unshift(selectedArrival);
+      }
+      if (selectedDeparture && days.length > 0) {
+        days[days.length - 1].transport.push(selectedDeparture);
       }
 
-      setCandidates(withCarbon);
+      const total_price_usd =
+        (selectedHotel?.price_per_night_usd ?? 0) * days.length +
+        days.reduce(
+          (s, d) =>
+            s +
+            d.activities.reduce((a, x) => a + x.price_usd, 0) +
+            d.transport.reduce((t, x) => t + x.price_usd, 0),
+          0
+        );
 
-      const stored = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
-      const list: Itinerary[] = stored ? JSON.parse(stored) : [];
-      withCarbon.forEach((it) => {
-        if (!list.find((i) => i.id === it.id)) list.push(it);
+      const itinerary: Itinerary = {
+        id: crypto.randomUUID(),
+        city: cityName,
+        start_date: startDate,
+        end_date: endDate,
+        days,
+        total_price_usd,
+        total_emission_kg: 0,
+        interest_match_score: scoreItinerary(
+          { ...({} as Itinerary), days, interest_match_score: 0 },
+          prefs
+        ),
+        regret_score: 0,
+      };
+
+      const carbonRes = await fetch("/api/infer/carbon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itinerary }),
+        signal: AbortSignal.timeout(10000),
       });
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      }
+      if (carbonRes.ok) {
+        const carbonData = await carbonRes.json();
+        const merged = applyCarbonResult(itinerary, {
+          items: carbonData.items ?? [],
+          total_kg: carbonData.total_kg ?? 0,
+        });
+        const scored = {
+          ...merged,
+          interest_match_score: scoreItinerary(merged, prefs),
+        };
+        setFinalItinerary(scored);
 
-      setStep(4);
+        const stored =
+          typeof window !== "undefined"
+            ? window.localStorage.getItem(STORAGE_KEY)
+            : null;
+        const list: Itinerary[] = stored ? JSON.parse(stored) : [];
+        if (!list.find((i) => i.id === scored.id)) list.push(scored);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        }
+      } else {
+        setFinalItinerary(itinerary);
+      }
+      setStep(8);
     } catch (e) {
       console.error(e);
-      setBuildStatus("Something went wrong. Please try again.");
     } finally {
       setBuilding(false);
     }
-  }, [cityName, city, startDate, endDate, preferences]);
-
-  const handleStep2Next = () => {
-    parsePrefs().then(() => setStep(3));
-    runBuild();
-  };
+  }, [
+    selectedHotel,
+    dailyPlan,
+    selectedArrival,
+    selectedDeparture,
+    cityName,
+    startDate,
+    endDate,
+    prefs,
+  ]);
 
   const handleSelectItinerary = (it: Itinerary) => {
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
-    const list: Itinerary[] = stored ? JSON.parse(stored) : [];
-    const updated = list.some((i) => i.id === it.id) ? list : [...list, it];
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    }
     window.location.href = `/itinerary/${it.id}`;
   };
+
+  const interActivitySegments = dailyPlan.flatMap((d) => d.transport);
 
   return (
     <>
@@ -173,11 +285,25 @@ export function ItineraryBuilder({
           boxShadow: "-4px 0 40px rgba(0,0,0,0.08)",
         }}
       >
-        <div className="p-4 flex items-center justify-between border-b sticky top-0 z-10" style={{ background: "var(--bg-surface)", borderColor: "var(--border)" }}>
-          <h2 className="text-lg font-display font-semibold" style={{ color: "var(--text-primary)" }}>
+        <div
+          className="p-4 flex items-center justify-between border-b sticky top-0 z-10"
+          style={{
+            background: "var(--bg-surface)",
+            borderColor: "var(--border)",
+          }}
+        >
+          <h2
+            className="text-lg font-display font-semibold"
+            style={{ color: "var(--text-primary)" }}
+          >
             Build itinerary · {cityName}
           </h2>
-          <button type="button" onClick={onClose} className="p-2 rounded-full hover:opacity-80" aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-full hover:opacity-80"
+            aria-label="Close"
+          >
             <X className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
           </button>
         </div>
@@ -185,11 +311,27 @@ export function ItineraryBuilder({
         <div className="p-6">
           <AnimatePresence mode="wait">
             {step === 1 && (
-              <motion.div key="step1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Pick your dates</p>
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <p
+                  className="text-sm"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Pick your dates
+                </p>
                 <div className="grid grid-cols-2 gap-4">
                   <label className="block">
-                    <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Check-in</span>
+                    <span
+                      className="text-xs block mb-1"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Check-in
+                    </span>
                     <input
                       type="date"
                       value={startDate}
@@ -199,7 +341,12 @@ export function ItineraryBuilder({
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs block mb-1" style={{ color: "var(--text-muted)" }}>Check-out</span>
+                    <span
+                      className="text-xs block mb-1"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Check-out
+                    </span>
                     <input
                       type="date"
                       value={endDate}
@@ -222,13 +369,25 @@ export function ItineraryBuilder({
             )}
 
             {step === 2 && (
-              <motion.div key="step2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  Tell us what you love (e.g. hiking, local food, museums, low carbon travel)
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <p
+                  className="text-sm"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Tell us what you love (e.g. hiking, local food, museums, low
+                  carbon travel)
                 </p>
                 <textarea
                   value={prefText}
-                  onChange={(e) => setPrefText(e.target.value.slice(0, 2000))}
+                  onChange={(e) =>
+                    setPrefText(e.target.value.slice(0, 2000))
+                  }
                   onBlur={() => parsePrefs()}
                   maxLength={2000}
                   rows={4}
@@ -242,7 +401,10 @@ export function ItineraryBuilder({
                       <span
                         key={i}
                         className="rounded-full px-3 py-1 text-sm"
-                        style={{ background: "var(--accent-green-light)", color: "var(--accent-green)" }}
+                        style={{
+                          background: "var(--accent-green-light)",
+                          color: "var(--accent-green)",
+                        }}
                       >
                         {i}
                       </span>
@@ -251,44 +413,315 @@ export function ItineraryBuilder({
                 )}
                 <button
                   type="button"
-                  onClick={handleStep2Next}
+                  onClick={() => parsePrefs().then(() => setStep(3))}
                   className="w-full py-3 rounded-xl font-medium text-white"
                   style={{ background: "#2d6a4f" }}
                 >
-                  Build my itinerary
+                  Next
                 </button>
               </motion.div>
             )}
 
-            {(step === 3 || building) && (
-              <motion.div key="step3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6 py-8">
-                <p className="text-center font-medium" style={{ color: "var(--text-primary)" }}>
-                  {buildStatus}
+            {step === 3 && (
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <h3
+                  className="font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  1. Choose your hotel
+                </h3>
+                <HotelSelector
+                  hotels={hotels}
+                  selectedHotel={selectedHotel}
+                  onSelect={setSelectedHotel}
+                  loading={loadingHotels}
+                />
+                <button
+                  type="button"
+                  onClick={() => setStep(4)}
+                  disabled={!selectedHotel}
+                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
+                  style={{ background: "#2d6a4f" }}
+                >
+                  Next
+                </button>
+              </motion.div>
+            )}
+
+            {step === 4 && (
+              <motion.div
+                key="step4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <h3
+                  className="font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  2. Choose activities
+                </h3>
+                <ActivitySelector
+                  activities={activities}
+                  selectedIds={selectedActivityIds}
+                  onToggle={handleActivityToggle}
+                  loading={loadingActivities}
+                />
+                <button
+                  type="button"
+                  onClick={() => setStep(5)}
+                  disabled={selectedActivityIds.size === 0}
+                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
+                  style={{ background: "#2d6a4f" }}
+                >
+                  Create daily plan
+                </button>
+              </motion.div>
+            )}
+
+            {step === 5 && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <h3
+                  className="font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  Daily plan preview
+                </h3>
+                {dailyPlan.length === 0 ? (
+                  <>
+                    <p
+                      className="text-sm"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Your activities arranged by location to minimize travel.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleScheduleActivities}
+                      className="w-full py-3 rounded-xl font-medium text-white"
+                      style={{ background: "#2d6a4f" }}
+                    >
+                      Generate plan
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-4 max-h-72 overflow-y-auto">
+                      {dailyPlan.map((day) => (
+                        <div
+                          key={day.date}
+                          className="rounded-xl p-4 border"
+                          style={{
+                            background: "var(--bg-elevated)",
+                            borderColor: "var(--border)",
+                          }}
+                        >
+                          <p
+                            className="font-medium text-sm mb-2"
+                            style={{ color: "var(--text-primary)" }}
+                          >
+                            {formatDate(day.date)}
+                          </p>
+                          <ul className="text-sm space-y-1">
+                            {day.activities.map((a) => (
+                              <li
+                                key={a.id}
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                • {a.name}
+                              </li>
+                            ))}
+                          </ul>
+                          {day.transport.length > 0 && (
+                            <p
+                              className="text-xs mt-2"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              {day.transport.filter((t) => t.mode === "walk")
+                                .length > 0
+                                ? "Includes walking"
+                                : ""}{" "}
+                              {day.transport.filter((t) => t.mode === "bus")
+                                .length > 0
+                                ? "• Transit"
+                                : ""}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStep(6)}
+                      className="w-full py-3 rounded-xl font-medium text-white"
+                      style={{ background: "#2d6a4f" }}
+                    >
+                      Next: Travel options
+                    </button>
+                  </>
+                )}
+              </motion.div>
+            )}
+
+            {step === 6 && (
+              <motion.div
+                key="step6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <h3
+                  className="font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  3. Travel options
+                </h3>
+                <TravelOptionsPanel
+                  arrivalOptions={arrivalOptions}
+                  departureOptions={departureOptions}
+                  selectedArrival={selectedArrival}
+                  selectedDeparture={selectedDeparture}
+                  onSelectArrival={setSelectedArrival}
+                  onSelectDeparture={setSelectedDeparture}
+                  interActivitySegments={interActivitySegments}
+                  loading={loadingFlights}
+                />
+                <button
+                  type="button"
+                  onClick={buildFinalItinerary}
+                  disabled={building}
+                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
+                  style={{ background: "#2d6a4f" }}
+                >
+                  {building ? "Building…" : "Build itinerary"}
+                </button>
+              </motion.div>
+            )}
+
+            {(step === 7 || building) && (
+              <motion.div
+                key="step7"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6 py-8"
+              >
+                <p
+                  className="text-center font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {building ? "Building your itinerary…" : "Loading…"}
                 </p>
                 <div className="flex justify-center">
                   <motion.div
                     className="w-12 h-12 rounded-full border-4 border-t-transparent"
-                    style={{ borderColor: "var(--accent-green)", borderTopColor: "transparent" }}
+                    style={{
+                      borderColor: "var(--accent-green)",
+                      borderTopColor: "transparent",
+                    }}
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
                   />
                 </div>
               </motion.div>
             )}
 
-            {step === 4 && !building && (
-              <motion.div key="step4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Choose one</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {candidates.map((it, i) => (
-                    <ItineraryCard
-                      key={it.id}
-                      itinerary={it}
-                      variant={i === 0 ? "best_match" : i === 1 ? "low_carbon" : "premium"}
-                      onSelect={() => handleSelectItinerary(it)}
-                      onLowerCarbon={() => setRegretItinerary(it)}
-                    />
-                  ))}
+            {step === 8 && finalItinerary && !building && (
+              <motion.div
+                key="step8"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <p
+                  className="text-sm"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Your itinerary is ready!
+                </p>
+                <div
+                  className="rounded-2xl p-5 border"
+                  style={{
+                    background: "var(--bg-elevated)",
+                    borderColor: "var(--border)",
+                  }}
+                >
+                  <p
+                    className="text-2xl font-display font-semibold mb-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {finalItinerary.total_price_usd.toLocaleString("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                      maximumFractionDigits: 0,
+                    })}
+                  </p>
+                  <p
+                    className="text-sm mb-4"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Total · {finalItinerary.days.length} days
+                  </p>
+                  <div className="mb-4">
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white"
+                      style={{
+                        backgroundColor:
+                          finalItinerary.total_emission_kg < 20
+                            ? "#2d6a4f"
+                            : finalItinerary.total_emission_kg <= 100
+                              ? "#d47c0f"
+                              : "#c1440e",
+                      }}
+                    >
+                      {finalItinerary.total_emission_kg.toFixed(1)} kg CO₂e
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRegretItinerary(finalItinerary)
+                      }
+                      className="w-full py-2 px-4 rounded-xl text-sm font-medium border"
+                      style={{
+                        borderColor: "var(--accent-green)",
+                        color: "var(--accent-green)",
+                        background: "transparent",
+                      }}
+                    >
+                      Lower carbon alternative
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSelectItinerary(finalItinerary)
+                      }
+                      className="w-full py-3 px-4 rounded-xl font-medium text-white"
+                      style={{ background: "#2d6a4f" }}
+                    >
+                      View itinerary
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -300,7 +733,10 @@ export function ItineraryBuilder({
         <RegretModal
           itinerary={regretItinerary}
           onClose={() => setRegretItinerary(null)}
-          onSwitch={() => {}}
+          onSwitch={(alt) => {
+            setFinalItinerary(alt);
+            setRegretItinerary(null);
+          }}
         />
       )}
     </>

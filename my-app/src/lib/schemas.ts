@@ -44,6 +44,7 @@ export const CarbonRequestSchema = z.object({
                   "bus",
                   "car",
                   "ferry",
+                  "walk",
                 ]),
                 origin: geoPointSchema,
                 destination: geoPointSchema,
@@ -142,4 +143,32 @@ export const RegretRequestSchema = z.object({
   user_preferences: RegretUserPreferencesSchema,
   itinerary_item: RegretItineraryItemSchema,
   context: RegretContextSchema.optional(),
+});
+
+const activitySchema = z
+  .object({
+    id: z.string(),
+    name: z.string().max(200),
+    category: z.string().max(50),
+    location: geoPointSchema,
+    price_usd: z.number().nonnegative(),
+    duration_hours: z.number().positive().max(24),
+  })
+  .passthrough();
+
+const hotelSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().max(200),
+    location: geoPointSchema,
+    price_per_night_usd: z.number().nonnegative(),
+    stars: z.number().int().min(1).max(5),
+  })
+  .passthrough();
+
+export const ScheduleActivitiesSchema = z.object({
+  activities: z.array(activitySchema).max(50),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  hotel: hotelSchema,
 });
