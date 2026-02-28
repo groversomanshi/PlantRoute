@@ -44,7 +44,15 @@ export async function getPreferenceByUserId(userId: string): Promise<{
   };
 
   const preferences: UserPreferences = snapshot
-    ? { ...snapshot, travel }
+    ? {
+        ...snapshot,
+        interests: snapshot.interests ?? [],
+        budget_level: snapshot.budget_level ?? "mid",
+        carbon_sensitivity: snapshot.carbon_sensitivity ?? "medium",
+        avoid_flying: snapshot.avoid_flying ?? false,
+        party_size: snapshot.party_size ?? 1,
+        travel,
+      }
     : {
         interests: [],
         budget_level: "mid",

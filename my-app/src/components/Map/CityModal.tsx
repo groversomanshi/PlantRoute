@@ -67,50 +67,63 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl shadow-lg"
-        style={{
-          background: "var(--bg-surface)",
-          boxShadow: "0 -4px 40px rgba(0,0,0,0.08)",
-          maxHeight: "70vh",
-        }}
+        className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white/25 backdrop-blur-2xl border border-white/30 border-b-0 shadow-[0_-4px_40px_rgba(0,0,0,0.08)] flex flex-col"
+        style={{ maxHeight: "42vh" }}
       >
-        <div className="p-4 flex items-center justify-between border-b" style={{ borderColor: "var(--border)" }}>
-          <h2 className="text-xl font-display font-semibold" style={{ color: "var(--text-primary)" }}>
+        <div className="p-3 flex items-center justify-between border-b border-white/20 flex-shrink-0">
+          <h2 className="text-lg font-display font-semibold" style={{ color: "var(--text-primary)" }}>
             {city.name}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-full hover:opacity-80"
+            className="p-1.5 rounded-full hover:opacity-80"
             aria-label="Close"
           >
-            <X className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
+            <X className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto max-h-[50vh]">
-          <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
+        <div className="p-3 overflow-y-auto overflow-x-hidden flex-1 min-h-0" style={{ maxHeight: "calc(42vh - 110px)" }}>
+          <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
             Top activities
           </p>
           {loading ? (
             <LoadingRoute />
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {activities.map((act) => {
                 const Icon = categoryIcons[act.category?.toLowerCase() ?? ""] ?? categoryIcons.default;
                 return (
-                  <span
+                  <div
                     key={act.id}
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border"
-                    style={{
-                      background: "var(--bg-elevated)",
-                      borderColor: "var(--border)",
-                      color: "var(--text-primary)",
-                    }}
+                    className="w-[150px] flex-shrink-0 rounded-xl overflow-hidden bg-white/25 backdrop-blur-xl border border-white/30"
                   >
-                    <Icon className="w-4 h-4" />
-                    {act.name} · {formatPrice(act.price_usd)}
-                  </span>
+                    <div className="w-full aspect-square bg-gray-200">
+                      {act.image_url ? (
+                        <img
+                          src={act.image_url}
+                          alt={act.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="w-full h-full flex items-center justify-center"
+                          style={{ color: "var(--accent-green)" }}
+                        >
+                          <Icon className="w-8 h-8" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-2.5">
+                      <p className="font-medium text-sm truncate leading-tight" style={{ color: "var(--text-primary)" }}>
+                        {act.name}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                        {formatPrice(act.price_usd)} · {act.duration_hours}h
+                      </p>
+                    </div>
+                  </div>
                 );
               })}
               {activities.length === 0 && !loading && (
@@ -122,11 +135,11 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
           )}
         </div>
 
-        <div className="p-4 border-t" style={{ borderColor: "var(--border)" }}>
+        <div className="p-3 border-t border-white/20 flex-shrink-0">
           <button
             type="button"
             onClick={onBuildItinerary}
-            className="w-full py-3 px-4 rounded-xl font-medium text-white transition opacity-90 hover:opacity-100"
+            className="w-full py-2.5 px-4 rounded-xl text-sm font-medium text-white transition opacity-90 hover:opacity-100"
             style={{ background: "#2d6a4f" }}
           >
             Build Itinerary

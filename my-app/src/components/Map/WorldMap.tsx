@@ -14,22 +14,39 @@ interface WorldMapProps {
   basemap?: "light" | "outdoors";
   onCitySelect: (city: GeoPoint) => void;
   pastTripCities?: string[];
+  hoveredCity?: GeoPoint | null;
+  flyToCity?: GeoPoint | null;
 }
 
-export function WorldMap({ useMapbox, basemap = "outdoors", onCitySelect, pastTripCities = [] }: WorldMapProps) {
+export function WorldMap({
+  useMapbox,
+  basemap = "outdoors",
+  onCitySelect,
+  pastTripCities = [],
+  hoveredCity = null,
+  flyToCity = null,
+}: WorldMapProps) {
   const content = useMapbox ? (
     <MapboxMap
       cities={CITIES_LIST}
       pastTripCities={pastTripCities}
       onCitySelect={onCitySelect}
       basemap={basemap}
+      hoveredCity={hoveredCity}
+      flyToCity={flyToCity}
     />
   ) : (
-    <LeafletMap cities={CITIES_LIST} pastTripCities={pastTripCities} onCitySelect={onCitySelect} />
+    <LeafletMap
+      cities={CITIES_LIST}
+      pastTripCities={pastTripCities}
+      onCitySelect={onCitySelect}
+      hoveredCity={hoveredCity}
+      flyToCity={flyToCity}
+    />
   );
 
   return (
-    <div className="w-full h-full min-h-screen" style={{ background: "var(--bg-primary)" }}>
+    <div className="w-full h-full" style={{ background: "var(--bg-primary)" }}>
       {content}
     </div>
   );

@@ -35,10 +35,15 @@ export function ActivityCard({ activity }: ActivityCardProps) {
     >
       <div className="flex items-start gap-3">
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: "var(--accent-green-light)", color: "var(--accent-green)" }}
+          className="w-14 h-14 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-gray-200"
         >
-          <Icon className="w-5 h-5" />
+          {activity.image_url ? (
+            <img src={activity.image_url} alt={activity.name} className="w-full h-full object-cover" />
+          ) : (
+            <span style={{ color: "var(--accent-green)" }}>
+              <Icon className="w-6 h-6" />
+            </span>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-medium" style={{ color: "var(--text-primary)" }}>

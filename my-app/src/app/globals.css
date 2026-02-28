@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
- --bg-primary: #e8f5f3;
-  --bg-surface: #faf7f2;
+  --bg-primary: #f5f5f5;
+  --bg-surface: #fafafa;
   --bg-elevated: #ffffff;
   --accent-green: #2d6a4f;
   --accent-green-mid: #52b788;
   --accent-green-light: #95d5b2;
   --accent-red: #c1440e;
   --accent-amber: #d47c0f;
-  --text-primary: #4ba92f;
+  --text-primary: #1a1a1a;
   --text-muted: #6b6560;
   --border: rgba(0, 0, 0, 0.08);
   --background: var(--bg-primary);
@@ -35,7 +35,7 @@
 }
 
 body {
-  background: #a4f0e5;
+  background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
 }
@@ -51,6 +51,11 @@ p, span, a, button, label, li {
 *:focus-visible {
   outline: 2px solid var(--accent-green);
   outline-offset: 2px;
+}
+
+/* Light mode map color tint (Mapbox) – adjust hue-rotate for different tones */
+.map-light-tint {
+  filter: hue-rotate(-15deg) saturate(0.85) brightness(1.03);
 }
 
 /* Map tile sepia filter for Leaflet fallback */

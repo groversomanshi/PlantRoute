@@ -4,8 +4,18 @@ import { ActivitiesQuerySchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { geocodeCity } from "@/lib/cities";
 import { createAmadeusClient } from "@/lib/amadeus";
+import { getUnsplashImageUrl } from "@/lib/unsplash";
 import { MOCK_ACTIVITIES } from "@/lib/mocks";
 import type { Activity } from "@/types";
+
+async function enrichActivityWithImage(
+  activity: Activity,
+  city: string
+): Promise<Activity> {
+  const query = `${activity.name} ${activity.category} ${city}`.trim();
+  const image_url = await getUnsplashImageUrl(query);
+  return { ...activity, image_url };
+}
 
 export async function GET(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.amadeus, null);
@@ -25,11 +35,14 @@ export async function GET(req: NextRequest) {
   const hasAmadeus =
     process.env.AMADEUS_API_KEY?.trim() && process.env.AMADEUS_API_SECRET?.trim();
   if (!hasAmadeus) {
-    const activities: Activity[] = MOCK_ACTIVITIES.slice(0, limit).map((a, i) => ({
+    const baseActivities: Activity[] = MOCK_ACTIVITIES.slice(0, limit).map((a, i) => ({
       ...a,
       id: `mock-${city}-${i}`,
       location: { ...point, name: city },
     }));
+    const activities = await Promise.all(
+      baseActivities.map((a) => enrichActivityWithImage(a, city))
+    );
     return NextResponse.json({ activities });
   }
 
@@ -53,7 +66,7 @@ export async function GET(req: NextRequest) {
       price?: { amount?: string };
       duration?: string;
     }>;
-    const activities: Activity[] = (Array.isArray(data) ? data : [])
+    const baseActivities: Activity[] = (Array.isArray(data) ? data : [])
       .slice(0, limit)
       .map((item, i) => ({
         id: item.id ?? `amadeus-${i}`,
@@ -67,14 +80,20 @@ export async function GET(req: NextRequest) {
         price_usd: parseFloat(item.price?.amount ?? "0") || 0,
         duration_hours: parseFloat(item.duration ?? "1") || 1,
       }));
+    const activities = await Promise.all(
+      baseActivities.map((a) => enrichActivityWithImage(a, city))
+    );
     return NextResponse.json({ activities });
   } catch (e) {
     console.error(String(e));
-    const activities: Activity[] = MOCK_ACTIVITIES.slice(0, limit).map((a, i) => ({
+    const baseActivities: Activity[] = MOCK_ACTIVITIES.slice(0, limit).map((a, i) => ({
       ...a,
       id: `fallback-${city}-${i}`,
       location: { ...point, name: city },
     }));
+    const activities = await Promise.all(
+      baseActivities.map((a) => enrichActivityWithImage(a, city))
+    );
     return NextResponse.json({ activities });
   }
 }
