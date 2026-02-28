@@ -40,6 +40,13 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Slight global text lift for front UI readability/alignment */
+h1, h2, h3, h4, h5, h6,
+p, span, a, button, label, li {
+  position: relative;
+  top: -1px;
+}
+
 /* Focus visible ring for accessibility */
 *:focus-visible {
   outline: 2px solid var(--accent-green);

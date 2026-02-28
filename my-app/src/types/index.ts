@@ -94,6 +94,9 @@ export interface TravelPreferences {
   dislike_rain: boolean;
   /** Explicit opt-out for weather dislikes (user tapped "None"). */
   no_weather_dislikes?: boolean;
+  /** Multi-select vibe tags (preferred field for UI). */
+  travel_vibes?: TravelVibe[];
+  /** Legacy single-select compatibility field. */
   travel_vibe?: "Chill" | "Adventure" | "Family" | "Romantic" | "Nightlife";
   additional_notes?: string;
   /** Set when user completes onboarding so we don't show the form again. */
@@ -123,6 +126,7 @@ export const DEFAULT_TRAVEL_PREFERENCES: TravelPreferences = {
   dislike_cold: false,
   dislike_rain: false,
   no_weather_dislikes: false,
+  travel_vibes: [],
   travel_vibe: undefined,
   additional_notes: "",
 };

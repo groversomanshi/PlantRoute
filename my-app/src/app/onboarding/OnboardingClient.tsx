@@ -121,7 +121,7 @@ export function OnboardingClient() {
             Set your travel preferences (1 - 5)
           </h1>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            We’ll use these to tailor your itineraries. You can change them anytime in Profile.
+            We’ll use these to tailor your itineraries. You can change them anytime in Preference.
           </p>
         </div>
 

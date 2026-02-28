@@ -191,7 +191,7 @@ function SliderRow({ label, left, right, value, onChange, onActivated, requireDr
             </div>
             {!isDragging && (
               <p
-                className="text-xs pointer-events-none"
+                className="text-xs pointer-events-none pl-5"
                 style={{ color: "var(--text-muted)" }}
               >
                 Drag the point left or right
@@ -353,10 +353,17 @@ export function TravelPreferencesForm({
   onValidationChange,
 }: TravelPreferencesFormProps) {
   const [, setActivatedCount] = useState(requireDragToActivate ? 0 : SLIDER_IDS.length);
+  const selectedVibes = (
+    value.travel_vibes?.length
+      ? value.travel_vibes
+      : value.travel_vibe
+        ? [value.travel_vibe]
+        : []
+  );
   const hasWeatherSelection = Boolean(
     value.no_weather_dislikes || value.dislike_heat || value.dislike_cold || value.dislike_rain
   );
-  const hasVibeSelection = Boolean(value.travel_vibe);
+  const hasVibeSelection = selectedVibes.length > 0;
 
   const handleSliderActivated = useCallback(() => {
     setActivatedCount((prev) => {
@@ -461,61 +468,71 @@ export function TravelPreferencesForm({
 
       <div className="mb-6">
         <p className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
-          Weather dislikes (required)
+          Weather dislikes (required 1 or more)
         </p>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() =>
-              update({
-                dislike_heat: false,
-                dislike_cold: false,
-                dislike_rain: false,
-                no_weather_dislikes: true,
-              })
-            }
+            disabled={Boolean(value.no_weather_dislikes)}
+            className="rounded-full px-3 py-1.5 border text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              borderColor: value.dislike_heat ? "var(--accent-green)" : "var(--border)",
+              background: value.dislike_heat ? "var(--accent-green-light)" : "transparent",
+              color: value.dislike_heat ? "var(--accent-green)" : "var(--text-primary)",
+            }}
+            onClick={() => update({ dislike_heat: !value.dislike_heat, no_weather_dislikes: false })}
+          >
+            Heat
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(value.no_weather_dislikes)}
+            className="rounded-full px-3 py-1.5 border text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              borderColor: value.dislike_cold ? "var(--accent-green)" : "var(--border)",
+              background: value.dislike_cold ? "var(--accent-green-light)" : "transparent",
+              color: value.dislike_cold ? "var(--accent-green)" : "var(--text-primary)",
+            }}
+            onClick={() => update({ dislike_cold: !value.dislike_cold, no_weather_dislikes: false })}
+          >
+            Cold
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(value.no_weather_dislikes)}
+            className="rounded-full px-3 py-1.5 border text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              borderColor: value.dislike_rain ? "var(--accent-green)" : "var(--border)",
+              background: value.dislike_rain ? "var(--accent-green-light)" : "transparent",
+              color: value.dislike_rain ? "var(--accent-green)" : "var(--text-primary)",
+            }}
+            onClick={() => update({ dislike_rain: !value.dislike_rain, no_weather_dislikes: false })}
+          >
+            Outside in the rain
+          </button>
+          <button
+            type="button"
             className="rounded-full px-3 py-1.5 border text-sm transition-colors"
             style={{
               borderColor: value.no_weather_dislikes ? "var(--accent-green)" : "var(--border)",
               background: value.no_weather_dislikes ? "var(--accent-green-light)" : "transparent",
               color: value.no_weather_dislikes ? "var(--accent-green)" : "var(--text-primary)",
             }}
+            onClick={() =>
+              update(
+                value.no_weather_dislikes
+                  ? { no_weather_dislikes: false }
+                  : {
+                      dislike_heat: false,
+                      dislike_cold: false,
+                      dislike_rain: false,
+                      no_weather_dislikes: true,
+                    }
+              )
+            }
           >
             None
           </button>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={value.dislike_heat}
-              onChange={(e) => update({ dislike_heat: e.target.checked, no_weather_dislikes: false })}
-              className="rounded border-gray-300 accent-[#2d6a4f]"
-            />
-            <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-              I really dislike heat
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={value.dislike_cold}
-              onChange={(e) => update({ dislike_cold: e.target.checked, no_weather_dislikes: false })}
-              className="rounded border-gray-300 accent-[#2d6a4f]"
-            />
-            <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-              I really dislike cold
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={value.dislike_rain}
-              onChange={(e) => update({ dislike_rain: e.target.checked, no_weather_dislikes: false })}
-              className="rounded border-gray-300 accent-[#2d6a4f]"
-            />
-            <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-              I really dislike being outside in the rain
-            </span>
-          </label>
         </div>
         {!hasWeatherSelection && (
           <p className="text-xs mt-2" style={{ color: "#b91c1c" }}>
@@ -526,7 +543,7 @@ export function TravelPreferencesForm({
 
       <div className="mb-6">
         <p className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
-          What best describes most of your trips? (required)
+          What best describes your trips? (required 1 or more)
         </p>
         <div className="flex flex-wrap gap-2">
           {TRAVEL_VIBES.map((vibe) => (
@@ -535,15 +552,19 @@ export function TravelPreferencesForm({
               type="button"
               className="flex items-center gap-2 cursor-pointer rounded-full px-3 py-1.5 border transition-colors"
               style={{
-                borderColor: value.travel_vibe === vibe ? "var(--accent-green)" : "var(--border)",
-                background: value.travel_vibe === vibe ? "var(--accent-green-light)" : "transparent",
-                color: value.travel_vibe === vibe ? "var(--accent-green)" : "var(--text-primary)",
+                borderColor: selectedVibes.includes(vibe) ? "var(--accent-green)" : "var(--border)",
+                background: selectedVibes.includes(vibe) ? "var(--accent-green-light)" : "transparent",
+                color: selectedVibes.includes(vibe) ? "var(--accent-green)" : "var(--text-primary)",
               }}
-              onClick={() =>
+              onClick={() => {
+                const next = selectedVibes.includes(vibe)
+                  ? selectedVibes.filter((v) => v !== vibe)
+                  : [...selectedVibes, vibe];
                 update({
-                  travel_vibe: value.travel_vibe === vibe ? undefined : vibe,
-                })
-              }
+                  travel_vibes: next,
+                  travel_vibe: next[0],
+                });
+              }}
             >
               <span className="text-sm">{vibe}</span>
             </button>
@@ -551,7 +572,7 @@ export function TravelPreferencesForm({
         </div>
         {!hasVibeSelection && (
           <p className="text-xs mt-2" style={{ color: "#b91c1c" }}>
-            Pick one vibe before continuing.
+            Pick at least one vibe before continuing.
           </p>
         )}
       </div>

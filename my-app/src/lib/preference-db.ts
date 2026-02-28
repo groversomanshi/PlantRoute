@@ -3,7 +3,7 @@
  * Used to store form data in the database for LLM training and personalization.
  */
 import { prisma } from "@/lib/prisma";
-import type { UserPreferences, TravelPreferences } from "@/types";
+import type { TravelVibe, UserPreferences, TravelPreferences } from "@/types";
 
 export async function getPreferenceByUserId(userId: string): Promise<{
   preferences: UserPreferences;
@@ -15,6 +15,12 @@ export async function getPreferenceByUserId(userId: string): Promise<{
 
   const snapshot = row.preferencesSnapshot as Partial<UserPreferences> | null;
   const snapshotTravel = snapshot?.travel as Partial<TravelPreferences> | undefined;
+  const snapshotVibes = Array.isArray(snapshotTravel?.travel_vibes)
+    ? snapshotTravel.travel_vibes.filter(Boolean) as TravelVibe[]
+    : [];
+  const selectedVibes = snapshotVibes.length > 0
+    ? snapshotVibes
+    : ([row.travelVibe] as TravelVibe[]);
 
   const travel: TravelPreferences = {
     trip_pace: row.tripPace,
@@ -28,7 +34,8 @@ export async function getPreferenceByUserId(userId: string): Promise<{
     dislike_heat: row.dislikeHeat,
     dislike_cold: row.dislikeCold,
     dislike_rain: row.dislikeRain,
-    travel_vibe: row.travelVibe as TravelPreferences["travel_vibe"],
+    travel_vibes: selectedVibes,
+    travel_vibe: selectedVibes[0],
     no_weather_dislikes:
       snapshotTravel?.no_weather_dislikes ??
       (!row.dislikeHeat && !row.dislikeCold && !row.dislikeRain),
@@ -65,7 +72,8 @@ export async function upsertPreference(
   const dislikeHeat = travel?.dislike_heat ?? false;
   const dislikeCold = travel?.dislike_cold ?? false;
   const dislikeRain = travel?.dislike_rain ?? false;
-  const travelVibe = travel?.travel_vibe ?? "Chill";
+  const travelVibes = travel?.travel_vibes?.filter(Boolean) as TravelVibe[] | undefined;
+  const travelVibe = travelVibes?.[0] ?? travel?.travel_vibe ?? "Chill";
   const additionalNotes = travel?.additional_notes ?? null;
   const completed = travel?.completed ?? false;
 
