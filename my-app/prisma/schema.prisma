@@ -12,13 +12,41 @@ datasource db {
 
 // NextAuth.js (Prisma adapter) — required for database sessions
 model User {
-  id            String    @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String?
-  email         String?   @unique
+  email         String?      @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
   sessions      Session[]
+  preference    Preference?
+}
+
+// User preferences from onboarding/profile form — for LLM training and personalization
+model Preference {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Travel preference sliders (0–1)
+  tripPace                Float    @default(0.5)
+  crowdComfort            Float    @default(0.5)
+  morningTolerance        Float    @default(0.5)
+  lateNightTolerance      Float    @default(0.5)
+  walkingEffort           Float    @default(0.5)
+  budgetLevel             Float    @default(0.5)
+  planningVsSpontaneity   Float    @default(0.5)
+  noiseSensitivity       Float    @default(0.5)
+  // Weather dislikes
+  dislikeHeat             Boolean  @default(false)
+  dislikeCold             Boolean  @default(false)
+  dislikeRain             Boolean  @default(false)
+  // Vibe and notes
+  travelVibe              String   @default("Chill")
+  additionalNotes         String?
+  completed               Boolean  @default(false)
+  // Full snapshot for LLM training (JSON: interests, raw_text, etc.)
+  preferencesSnapshot     Json?
+  updatedAt               DateTime @updatedAt
 }
 
 model Account {

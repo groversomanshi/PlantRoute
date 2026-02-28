@@ -5,6 +5,7 @@ import { validateQuery } from "@/lib/validate";
 import { SupermemoryRetrieveQuerySchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createSupermemoryClient, retrieveMemory } from "@/lib/supermemory";
+import { getPreferenceByUserId } from "@/lib/preference-db";
 
 export async function GET(req: NextRequest) {
   let session;
@@ -24,13 +25,6 @@ export async function GET(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.supermemory, userId);
   if (rateLimitResponse) return rateLimitResponse;
 
-  if (!process.env.SUPERMEMORY_API_KEY?.trim()) {
-    return NextResponse.json(
-      { preferences: null, past_trips: null },
-      { status: 200 }
-    );
-  }
-
   const { searchParams } = new URL(req.url);
   const query = Object.fromEntries(searchParams);
   const validated = validateQuery(SupermemoryRetrieveQuerySchema, query);
@@ -41,18 +35,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  if (type === "preferences") {
+    try {
+      const result = await getPreferenceByUserId(userId);
+      return NextResponse.json(result ?? { preferences: null });
+    } catch (e) {
+      console.error(String(e));
+      return NextResponse.json({ preferences: null }, { status: 200 });
+    }
+  }
+
+  if (!process.env.SUPERMEMORY_API_KEY?.trim()) {
+    return NextResponse.json({ past_trips: [] }, { status: 200 });
+  }
+
   try {
     const client = createSupermemoryClient();
     const content = await retrieveMemory(client, userId, type);
-    if (type === "preferences") {
-      return NextResponse.json(content ?? { preferences: null });
-    }
     return NextResponse.json(content ?? { past_trips: [] });
   } catch (e) {
     console.error(String(e));
-    return NextResponse.json(
-      type === "preferences" ? { preferences: null } : { past_trips: [] },
-      { status: 200 }
-    );
+    return NextResponse.json({ past_trips: [] }, { status: 200 });
   }
 }

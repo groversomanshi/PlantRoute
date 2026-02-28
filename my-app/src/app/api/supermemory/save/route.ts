@@ -5,6 +5,7 @@ import { validateBody } from "@/lib/validate";
 import { SupermemorySaveSchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createSupermemoryClient, saveMemory } from "@/lib/supermemory";
+import { upsertPreference } from "@/lib/preference-db";
 
 export async function POST(req: NextRequest) {
   let session;
@@ -24,13 +25,6 @@ export async function POST(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.supermemory, userId);
   if (rateLimitResponse) return rateLimitResponse;
 
-  if (!process.env.SUPERMEMORY_API_KEY?.trim()) {
-    return NextResponse.json(
-      { error: "Supermemory not configured" },
-      { status: 503 }
-    );
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -44,6 +38,26 @@ export async function POST(req: NextRequest) {
   const { userId: bodyUserId, type, data } = validated.data;
   if (bodyUserId !== userId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (type === "preferences") {
+    try {
+      const preferences = (data as { preferences?: unknown }).preferences;
+      if (preferences && typeof preferences === "object") {
+        await upsertPreference(userId, preferences as Parameters<typeof upsertPreference>[1]);
+      }
+      return NextResponse.json({ success: true, memoryId: "db" });
+    } catch (e) {
+      console.error(String(e));
+      return NextResponse.json({ error: "Failed to save preferences" }, { status: 500 });
+    }
+  }
+
+  if (!process.env.SUPERMEMORY_API_KEY?.trim()) {
+    return NextResponse.json(
+      { error: "Supermemory not configured" },
+      { status: 503 }
+    );
   }
 
   try {
