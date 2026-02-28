@@ -11,6 +11,14 @@ const DRAG_THRESHOLD_PX = 20;
 const TRACK_HEIGHT_LARGE = 24;
 const TRACK_HEIGHT_THIN = 8;
 const TRACK_TRANSITION_MS = 350;
+const HANDLE_SIZE_PX = 12;
+const HANDLE_EDGE_INSET_PX = 2;
+
+function handleLeftCss(value: number): string {
+  // Keeps the full handle inside the track and slightly inset from both edges.
+  const pixelOffset = value * HANDLE_SIZE_PX + (2 * value - 1) * HANDLE_EDGE_INSET_PX;
+  return `calc(${value * 100}% - ${pixelOffset}px)`;
+}
 
 function valueToScale(value: number): number {
   return Math.round(SCALE_MIN + value * (SCALE_MAX - SCALE_MIN));
@@ -182,7 +190,7 @@ function SliderRow({ label, left, right, value, onChange, onActivated, requireDr
                 onPointerDown={handlePointerDown}
                 className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full cursor-grab active:cursor-grabbing outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-[var(--accent-green)] z-10"
                 style={{
-                  left: `calc(${displayValue * 100}% - 6px)`,
+                  left: handleLeftCss(displayValue),
                   background: "var(--accent-green)",
                   boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                   transition: isDragging ? "none" : "left 0.15s ease",
@@ -235,7 +243,7 @@ function SliderRow({ label, left, right, value, onChange, onActivated, requireDr
               <div
                 className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-10 pointer-events-none"
                 style={{
-                  left: `calc(${value * 100}% - 6px)`,
+                  left: handleLeftCss(value),
                   background: "var(--accent-green)",
                   boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                   transition: `left ${TRACK_TRANSITION_MS}ms ease-out`,
@@ -284,7 +292,7 @@ function SliderRow({ label, left, right, value, onChange, onActivated, requireDr
               <div
                 className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-10 pointer-events-none"
                 style={{
-                  left: `calc(${value * 100}% - 6px)`,
+                  left: handleLeftCss(value),
                   background: "var(--accent-green)",
                   boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
                 }}
