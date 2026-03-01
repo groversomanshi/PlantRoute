@@ -8,10 +8,31 @@ declare module "@google/genai" {
     apiKey: string;
   }
 
+  /** Response shape for generateContent (Gemini API). */
+  export interface GenerateContentCandidate {
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }
+
+  export interface GenerateContentResponse {
+    text?: string;
+    candidates?: GenerateContentCandidate[];
+  }
+
+  /** Thinking level for search/grounding (matches package enum). */
+  export enum ThinkingLevel {
+    THINKING_LEVEL_UNSPECIFIED = "THINKING_LEVEL_UNSPECIFIED",
+    LOW = "LOW",
+    MEDIUM = "MEDIUM",
+    HIGH = "HIGH",
+    MINIMAL = "MINIMAL",
+  }
+
   export class GoogleGenAI {
     constructor(options: GoogleGenAIOptions);
     models: {
-      generateContent(options: unknown): Promise<{ text?: string; candidates?: unknown[] }>;
+      generateContent(options: unknown): Promise<GenerateContentResponse>;
       generateContentStream(options: unknown): AsyncGenerator<{ text?: string }>;
     };
   }

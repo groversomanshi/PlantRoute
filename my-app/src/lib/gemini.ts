@@ -1,9 +1,17 @@
-import type { UserPreferences } from "@/types";
-import { GoogleGenAI } from '@google/genai';
+import type { Activity, Hotel, TransportSegment, UserPreferences } from "@/types";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { createAmadeusClient } from "./amadeus";
-import { CITY_TO_IATA } from "./airport-coords";
+import { CITY_TO_IATA, getAirportCoords } from "./airport-coords";
 
 const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+] as const;
+
+/** Models that support Google Search + thinking; try preview first. */
+const GEMINI_SEARCH_MODELS = [
+  "gemini-3-flash-preview",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
   "gemini-1.5-flash",
@@ -23,7 +31,10 @@ async function generateWithModelFallback(
         contents: input.contents,
         config: input.config,
       });
-      const raw = result.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      type Candidate = { content?: { parts?: Array<{ text?: string }> } };
+      const raw =
+        (result as { candidates?: Candidate[] }).candidates?.[0]?.content?.parts?.[0]
+          ?.text ?? "";
       if (raw.trim()) return raw;
     } catch {
       // Try next model and gracefully fall back if none are available.
@@ -233,10 +244,10 @@ export async function findRealHotels(
 
         // Prefer priced offers, then fill with real directory hotels so UI has multiple options.
         if (offerHotels.length > 0) {
-          const seen = new Set<string>(offerHotels.map((h) => h.id));
+          const seen = new Set<string>(offerHotels.map((h: { id: string }) => h.id));
           const merged = [
             ...offerHotels,
-            ...directoryHotels.filter((h) => !seen.has(h.id)),
+            ...directoryHotels.filter((h: { id: string }) => !seen.has(h.id)),
           ];
           return merged.slice(0, 10);
         }
@@ -363,6 +374,177 @@ export async function findRealFlights(
     }
 }
 
+/** Params for full travel search (hotels, activities, flights). */
+export interface TravelSearchParams {
+  city: string;
+  startDate: string;
+  endDate: string;
+  interests?: string[];
+  budgetLevel?: string;
+  originIata: string;
+  destinationIata: string;
+}
+
+function flightOfferToSegment(
+  offer: {
+    id: string;
+    origin_iata: string;
+    destination_iata: string;
+    price_usd: number;
+    duration_minutes: number;
+  },
+  mode: "flight_short" | "flight_long"
+): TransportSegment {
+  const orig = getAirportCoords(offer.origin_iata);
+  const dest = getAirportCoords(offer.destination_iata);
+  return {
+    id: offer.id,
+    mode,
+    origin: {
+      lat: orig?.[0] ?? 0,
+      lng: orig?.[1] ?? 0,
+      name: offer.origin_iata,
+    },
+    destination: {
+      lat: dest?.[0] ?? 0,
+      lng: dest?.[1] ?? 0,
+      name: offer.destination_iata,
+    },
+    price_usd: offer.price_usd,
+    duration_minutes: offer.duration_minutes,
+  };
+}
+
+/**
+ * Full travel search: hotels, arrival/departure flights. Activities left empty (caller can add later).
+ */
+async function searchTravelWithGemini(
+  params: TravelSearchParams
+): Promise<{
+  hotels: Hotel[];
+  activities: Activity[];
+  arrivalFlights: TransportSegment[];
+  departureFlights: TransportSegment[];
+} | null> {
+  const apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+  if (!apiKey) return null;
+
+  const { city, startDate, endDate, originIata, destinationIata } = params;
+
+  try {
+    const [hotels, arrivalOffers, departureOffers] = await Promise.all([
+      findRealHotels(apiKey, city, startDate, endDate),
+      findRealFlights(apiKey, originIata, destinationIata, startDate),
+      findRealFlights(apiKey, destinationIata, originIata, endDate),
+    ]);
+
+    const toHotel = (h: {
+      id: string;
+      name: string;
+      location: { lat: number; lng: number; name: string };
+      price_per_night_usd: number;
+      stars: number;
+    }): Hotel => ({
+      id: h.id,
+      name: h.name,
+      location: h.location,
+      price_per_night_usd: h.price_per_night_usd,
+      stars: h.stars,
+    });
+
+    const arrivalFlights = arrivalOffers.map((o) =>
+      flightOfferToSegment(
+        {
+          id: o.id,
+          origin_iata: o.origin_iata,
+          destination_iata: o.destination_iata,
+          price_usd: o.price_usd,
+          duration_minutes: o.duration_minutes,
+        },
+        o.duration_minutes >= 180 ? "flight_long" : "flight_short"
+      )
+    );
+    const departureFlights = departureOffers.map((o) =>
+      flightOfferToSegment(
+        {
+          id: o.id,
+          origin_iata: o.origin_iata,
+          destination_iata: o.destination_iata,
+          price_usd: o.price_usd,
+          duration_minutes: o.duration_minutes,
+        },
+        o.duration_minutes >= 180 ? "flight_long" : "flight_short"
+      )
+    );
+
+    return {
+      hotels: hotels.map(toHotel),
+      activities: [],
+      arrivalFlights,
+      departureFlights,
+    };
+  } catch (e) {
+    console.error("[searchTravelWithGemini]", e);
+    return null;
+  }
+}
+
+export type QuickSearchResult =
+  | { ok: true; text: string }
+  | { ok: false; error: string; rateLimit?: boolean; retryAfterSeconds?: number };
+
+/**
+ * Quick AI search (Ask an AI Travel Agent): free-form query with Google Search grounding.
+ * Returns result with text, or error info (e.g. rate limit with retryAfterSeconds).
+ */
+export async function quickSearchWithGemini(query: string): Promise<QuickSearchResult> {
+  const apiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+  if (!apiKey) return { ok: false, error: "GEMINI_API_KEY not set" };
+
+  const genAI = new GoogleGenAI({ apiKey });
+
+  const config = {
+    thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+    tools: [{ googleSearch: {} }],
+  };
+  const contents = [{ role: "user" as const, parts: [{ text: query }] }];
+
+  let lastError: unknown;
+  for (const model of GEMINI_SEARCH_MODELS) {
+    try {
+      const stream = await genAI.models.generateContentStream({
+        model,
+        config,
+        contents,
+      });
+      let fullText = "";
+      for await (const chunk of stream) {
+        const t = (chunk as { text?: string }).text ?? "";
+        if (t) fullText += t;
+      }
+      const text = fullText.trim();
+      if (text) return { ok: true, text };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  console.error("[quickSearchWithGemini]", lastError);
+  const errObj = (lastError ?? {}) as { status?: number; code?: number; message?: string };
+  const status = errObj?.status ?? errObj?.code;
+  const msg = typeof errObj?.message === "string" ? errObj.message : "";
+  if (status === 429 || /quota|rate limit|429|RESOURCE_EXHAUSTED/i.test(msg)) {
+    const retryMatch = msg.match(/retry in (\d+(?:\.\d+)?)\s*s/i) ?? msg.match(/"retryDelay":\s*"(\d+)s"/);
+    const retrySec = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+    return {
+      ok: false,
+      error: "Gemini rate limit reached (free tier: 20 requests/day). Try again later.",
+      rateLimit: true,
+      retryAfterSeconds: retrySec,
+    };
+  }
+  return { ok: false, error: "Request failed" };
+}
 
 /** Simple keyword-based fallback when Gemini is not configured. */
 export function fallbackParsePreferences(text: string): UserPreferences {
@@ -398,3 +580,6 @@ export function fallbackParsePreferences(text: string): UserPreferences {
     raw_text: text,
   };
 }
+
+export { searchTravelWithGemini };
+

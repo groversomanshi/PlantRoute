@@ -78,6 +78,17 @@ export const HotelsQuerySchema = z.object({
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+/** POST /api/travel/search body: city, dates, interests, budget, origin/destination IATA. */
+export const TravelSearchSchema = z.object({
+  city: z.string().min(1).max(100).trim(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  interests: z.array(z.string().max(100)).max(20).optional(),
+  budgetLevel: z.string().max(50).optional(),
+  originIata: z.string().min(1).max(10).trim(),
+  destinationIata: z.string().min(1).max(10).trim(),
+});
+
 export const FlightsQuerySchema = z.object({
   origin: z.string().min(1).max(100).trim(),
   destination: z.string().min(1).max(100).trim(),

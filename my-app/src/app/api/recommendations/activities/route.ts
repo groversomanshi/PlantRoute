@@ -80,7 +80,12 @@ export async function GET(req: NextRequest) {
       clearTimeout(timeout);
       if (res.ok) {
         const batch = (await res.json()) as { scores: Array<{ fit_score: number; regret_probability?: number; explanation?: string[] | null }> };
-        ranked = mergeAndRank(activities, batch.scores ?? []);
+        const scores = (batch.scores ?? []).map((s) => ({
+          fit_score: s.fit_score,
+          regret_probability: s.regret_probability ?? 0,
+          explanation: s.explanation ?? null,
+        }));
+        ranked = mergeAndRank(activities, scores);
       } else {
         ranked = rankActivitiesFallback(activities, preferences?.interests ?? []);
       }

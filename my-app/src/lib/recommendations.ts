@@ -53,7 +53,7 @@ export interface RankedActivity extends Activity {
 
 /** Map app TravelPreferences to engine TravelInput (0–1 sliders). */
 export function travelToEngineInput(travel: TravelPreferences | undefined): TravelInput {
-  const t = travel ?? {};
+  const t: Partial<TravelPreferences> = travel ?? {};
   return {
     trip_pace: typeof t.trip_pace === "number" ? t.trip_pace : 0.5,
     crowd_comfort: typeof t.crowd_comfort === "number" ? t.crowd_comfort : 0.5,
