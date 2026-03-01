@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { TreePine } from "lucide-react";
+import { TreePine, Trash2, Pencil } from "lucide-react";
 import { useProfile } from "@/hooks/useProfile";
 import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
 import { ATTRACTION_TYPES, DEFAULT_TRAVEL_PREFERENCES, type UserPreferences } from "@/types";
@@ -37,7 +37,7 @@ export default function ProfileClient({ user: userProp }: ProfileClientProps) {
   const [allTrips, setAllTrips] = useState<TripItem[]>([]);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
+  const loadTrips = useCallback(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const list = raw ? JSON.parse(raw) : [];
@@ -51,7 +51,21 @@ export default function ProfileClient({ user: userProp }: ProfileClientProps) {
           kg: it.total_emission_kg ?? 0,
         }))
     );
-  }, [activeTab]);
+  }, []);
+
+  useEffect(() => {
+    loadTrips();
+  }, [activeTab, loadTrips]);
+
+  const handleDeleteTrip = useCallback((tripId: string) => {
+    if (typeof window === "undefined") return;
+    if (!confirm("Delete this trip? This cannot be undone.")) return;
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const list: { id: string; confirmed?: boolean }[] = raw ? JSON.parse(raw) : [];
+    const filtered = list.filter((it) => it.id !== tripId);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    loadTrips();
+  }, [loadTrips]);
 
   const today = new Date().toISOString().slice(0, 10);
   const pastTrips = allTrips.filter((t) => t.date < today);
@@ -203,17 +217,41 @@ export default function ProfileClient({ user: userProp }: ProfileClientProps) {
             </div>
             <ul className="space-y-2">
               {displayedTrips.map((trip) => (
-                <li key={trip.id}>
-                  <Link
-                    href={`/itinerary/${trip.id}`}
-                    className="block rounded-xl p-4 border hover:bg-black/5 transition-colors"
-                    style={{ borderColor: "var(--border)" }}
-                  >
+                <li
+                  key={trip.id}
+                  className="group flex items-center gap-2 rounded-xl p-4 border hover:bg-black/5 transition-colors"
+                  style={{ borderColor: "var(--border)" }}
+                >
+                  <Link href={`/itinerary/${trip.id}`} className="flex-1 min-w-0">
                     <span className="font-medium">{trip.city}</span>
                     <span className="text-sm ml-2" style={{ color: "var(--text-muted)" }}>
                       {trip.date} · {trip.kg.toFixed(0)} kg CO₂e
                     </span>
                   </Link>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Link
+                      href={`/itinerary/${trip.id}?edit=1`}
+                      className="p-2 rounded-lg hover:bg-black/10 transition-colors"
+                      title="Edit trip"
+                      style={{ color: "var(--text-muted)" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleDeleteTrip(trip.id);
+                      }}
+                      className="p-2 rounded-lg hover:bg-red-100 transition-colors"
+                      title="Delete trip"
+                      style={{ color: "var(--text-muted)" }}
+                      aria-label="Delete trip"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </li>
               ))}
               {displayedTrips.length === 0 && (
