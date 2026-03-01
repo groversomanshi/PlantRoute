@@ -55,6 +55,54 @@ export async function parsePreferencesWithGemini(
   }
 }
 
+/** Suggest one hotel from the list that is best for proximity to the selected attractions. */
+export async function suggestHotelByProximity(
+  apiKey: string,
+  city: string,
+  selectedAttractions: Array<{ id: string; name: string; location: { lat: number; lng: number; name: string } }>,
+  hotels: Array<{ id: string; name: string }>
+): Promise<{ hotelId: string; reason: string }> {
+  if (hotels.length === 0) {
+    return { hotelId: "", reason: "No hotels available." };
+  }
+  if (hotels.length === 1) {
+    return { hotelId: hotels[0]!.id, reason: "Only one hotel available." };
+  }
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const attractionList = selectedAttractions
+    .map((a) => `${a.name} (${a.location.name ?? city})`)
+    .join(", ");
+  const hotelList = hotels.map((h) => `${h.id}: ${h.name}`).join("\n");
+  const prompt = `The traveler is visiting "${city}" and has selected these attractions they want to visit: ${attractionList}.
+
+Here are the available hotels (id and name):
+${hotelList}
+
+Which hotel is best for proximity to these attractions (most central / convenient base)? Reply with ONLY valid JSON, no markdown:
+{ "hotelId": "<exact id from the list>", "reason": "<one short sentence>" }`;
+
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+  const raw = result.response.text();
+  if (!raw?.trim()) {
+    return { hotelId: hotels[0]!.id, reason: "Central option for your stay." };
+  }
+  const cleaned = raw.replace(/```json?\s*/gi, "").replace(/```\s*/g, "").trim();
+  try {
+    const parsed = JSON.parse(cleaned) as { hotelId?: string; reason?: string };
+    const id = String(parsed.hotelId ?? "").trim();
+    const found = hotels.some((h) => h.id === id);
+    return {
+      hotelId: found ? id : hotels[0]!.id,
+      reason: String(parsed.reason ?? "Central location for your selected attractions.").slice(0, 200),
+    };
+  } catch {
+    return { hotelId: hotels[0]!.id, reason: "Central option for your stay." };
+  }
+}
+
 /** Simple keyword-based fallback when Gemini is not configured. */
 export function fallbackParsePreferences(text: string): UserPreferences {
   const t = text.toLowerCase();
