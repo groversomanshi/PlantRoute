@@ -1,12 +1,11 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Itinerary } from "@/types";
 import { ActivityCard } from "@/components/Itinerary/ActivityCard";
 import { TransportCard } from "@/components/Itinerary/TransportCard";
-import { CarbonBadge } from "@/components/UI/CarbonBadge";
 import { SavePreferencesBanner } from "@/components/UI/SavePreferencesBanner";
 import { RegretModal } from "@/components/UI/RegretModal";
 import { formatPrice, formatDate } from "@/lib/utils";
@@ -16,11 +15,11 @@ const STORAGE_KEY = "plantroute_itineraries";
 
 export default function ItineraryDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const id = typeof params.id === "string" ? params.id : "";
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
   const [regretOpen, setRegretOpen] = useState(false);
   const [showSaveBanner, setShowSaveBanner] = useState(false);
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -69,39 +68,75 @@ export default function ItineraryDetailPage() {
         <span />
       </header>
 
-      <div className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="md:col-span-2 space-y-6">
           {itinerary.days.map((day) => (
-            <section key={day.date} className="rounded-2xl p-5" style={{ background: "var(--bg-elevated)", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-              <h2 className="text-lg font-display font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-                {formatDate(day.date)}
-              </h2>
-              {day.hotel && (
-                <div className="mb-4 p-3 rounded-xl" style={{ background: "var(--bg-surface)", borderLeft: "4px solid var(--accent-green-mid)" }}>
-                  <p className="font-medium text-sm">Hotel: {day.hotel.name}</p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {formatPrice(day.hotel.price_per_night_usd)}/night
-                  </p>
-                </div>
-              )}
-              {day.transport.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Transport</p>
-                  {day.transport.map((seg) => (
-                    <TransportCard key={seg.id} segment={seg} />
-                  ))}
-                </div>
-              )}
-              <div className="space-y-2">
-                <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Activities</p>
-                {day.activities.map((act) => (
-                  <ActivityCard key={act.id} activity={act} />
-                ))}
+            <section
+              key={day.date}
+              className="rounded-2xl p-5"
+              style={{ background: "var(--bg-elevated)", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="text-lg font-display font-semibold" style={{ color: "var(--text-primary)" }}>
+                  {formatDate(day.date)}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCollapsedDates((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(day.date)) next.delete(day.date);
+                      else next.add(day.date);
+                      return next;
+                    })
+                  }
+                  className="rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                  style={{
+                    borderColor: "var(--border)",
+                    color: "var(--text-primary)",
+                    background: "var(--bg-surface)",
+                  }}
+                  aria-label={collapsedDates.has(day.date) ? "Expand this day" : "Collapse this day"}
+                >
+                  {collapsedDates.has(day.date) ? "Expand" : "Collapse"}
+                </button>
               </div>
+
+              {!collapsedDates.has(day.date) && (
+                <>
+                  {day.hotel && (
+                    <div className="mb-4 p-3 rounded-xl" style={{ background: "var(--bg-surface)", borderLeft: "4px solid var(--accent-green-mid)" }}>
+                      <p className="font-medium text-sm">Hotel: {day.hotel.name}</p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {formatPrice(day.hotel.price_per_night_usd)}/night
+                      </p>
+                    </div>
+                  )}
+                  {day.transport.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Transport</p>
+                      {day.transport.map((seg) => (
+                        <TransportCard key={seg.id} segment={seg} />
+                      ))}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Activities</p>
+                    {day.activities.map((act) => (
+                      <ActivityCard key={act.id} activity={act} />
+                    ))}
+                  </div>
+                </>
+              )}
+              {collapsedDates.has(day.date) && (
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  {day.activities.length} activities · {day.transport.length} transport
+                </p>
+              )}
             </section>
           ))}
         </div>
-
+        
         <aside className="space-y-6">
           <div className="rounded-2xl p-5 sticky top-24" style={{ background: "var(--bg-elevated)", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
             <h3 className="font-display font-semibold mb-4" style={{ color: "var(--text-primary)" }}>

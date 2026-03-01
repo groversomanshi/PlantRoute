@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import type { GeoPoint } from "@/types";
 import type {
   Itinerary,
@@ -35,6 +35,7 @@ export function ItineraryBuilder({
   onClose,
   initialPreferences,
 }: ItineraryBuilderProps) {
+  const todayIso = new Date().toISOString().split("T")[0] ?? "";
   const [step, setStep] = useState(1);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -60,6 +61,7 @@ export function ItineraryBuilder({
   const [loadingHotels, setLoadingHotels] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [loadingFlights, setLoadingFlights] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
   const [building, setBuilding] = useState(false);
   const [finalItinerary, setFinalItinerary] = useState<Itinerary | null>(null);
   const [regretItinerary, setRegretItinerary] = useState<Itinerary | null>(null);
@@ -104,6 +106,19 @@ export function ItineraryBuilder({
   }, [step, cityName, startDate, endDate]);
 
   const interestsParam = (preferences?.interests ?? ["culture", "outdoor"]).join(",");
+
+  useEffect(() => {
+    if (startDate && startDate < todayIso) {
+      setStartDate(todayIso);
+    }
+  }, [startDate, todayIso]);
+
+  useEffect(() => {
+    const minCheckout = startDate || todayIso;
+    if (endDate && endDate < minCheckout) {
+      setEndDate(minCheckout);
+    }
+  }, [endDate, startDate, todayIso]);
 
   useEffect(() => {
     if (step === 4) {
@@ -177,6 +192,16 @@ export function ItineraryBuilder({
     startDate,
     endDate,
   ]);
+
+  const handleCreateDailyPlan = useCallback(async () => {
+    setStep(5);
+    setGeneratingPlan(true);
+    try {
+      await handleScheduleActivities();
+    } finally {
+      setGeneratingPlan(false);
+    }
+  }, [handleScheduleActivities]);
 
   const buildFinalItinerary = useCallback(async () => {
     if (!selectedHotel || dailyPlan.length === 0) return;
@@ -271,16 +296,18 @@ export function ItineraryBuilder({
   };
 
   const interActivitySegments = dailyPlan.flatMap((d) => d.transport);
+  const isExpandedPanel = step >= 5;
 
   return (
     <>
       <motion.div
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
+        initial={{ x: "100%", width: "min(100vw, 32rem)" }}
+        animate={{ x: 0, width: isExpandedPanel ? "100vw" : "min(100vw, 32rem)" }}
         exit={{ x: "100%" }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className="fixed inset-y-0 right-0 w-full max-w-lg z-50 overflow-y-auto"
+        transition={{ type: "spring", damping: 28, stiffness: 220 }}
+        className="fixed inset-y-0 right-0 z-50 overflow-y-auto"
         style={{
+          maxWidth: "100vw",
           background: "var(--bg-surface)",
           boxShadow: "-4px 0 40px rgba(0,0,0,0.08)",
         }}
@@ -292,12 +319,38 @@ export function ItineraryBuilder({
             borderColor: "var(--border)",
           }}
         >
-          <h2
-            className="text-lg font-display font-semibold"
-            style={{ color: "var(--text-primary)" }}
-          >
-            Build itinerary · {cityName}
-          </h2>
+          <div className="flex items-center gap-2">
+            {(step === 2 || step === 3 || step === 4 || step === 5) && (
+              <button
+                type="button"
+                onClick={() => setStep(step - 1)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border hover:opacity-90"
+                style={{
+                  borderColor: "var(--border)",
+                  color: "var(--text-primary)",
+                  background: "var(--bg-elevated)",
+                }}
+                aria-label={
+                  step === 5
+                    ? "Back to activities"
+                    : step === 4
+                      ? "Back to hotels"
+                      : step === 3
+                        ? "Back to preferences"
+                        : "Back to dates"
+                }
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-xs font-medium">Back</span>
+              </button>
+            )}
+            <h2
+              className="text-lg font-display font-semibold"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Build itinerary · {cityName}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -336,6 +389,7 @@ export function ItineraryBuilder({
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
+                      min={todayIso}
                       className="w-full rounded-lg border px-3 py-2"
                       style={{ borderColor: "var(--border)" }}
                     />
@@ -351,6 +405,7 @@ export function ItineraryBuilder({
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
+                      min={startDate || todayIso}
                       className="w-full rounded-lg border px-3 py-2"
                       style={{ borderColor: "var(--border)" }}
                     />
@@ -460,7 +515,7 @@ export function ItineraryBuilder({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="space-y-4"
+                className="space-y-4 min-h-[72vh] flex flex-col"
               >
                 <h3
                   className="font-medium"
@@ -468,20 +523,22 @@ export function ItineraryBuilder({
                 >
                   2. Choose activities
                 </h3>
-                <ActivitySelector
-                  activities={activities}
-                  selectedIds={selectedActivityIds}
-                  onToggle={handleActivityToggle}
-                  loading={loadingActivities}
-                />
+                <div className="flex-1 min-h-0">
+                  <ActivitySelector
+                    activities={activities}
+                    selectedIds={selectedActivityIds}
+                    onToggle={handleActivityToggle}
+                    loading={loadingActivities}
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={() => setStep(5)}
-                  disabled={selectedActivityIds.size === 0}
-                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
+                  onClick={handleCreateDailyPlan}
+                  disabled={selectedActivityIds.size === 0 || generatingPlan}
+                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50 mt-auto"
                   style={{ background: "#2d6a4f" }}
                 >
-                  Create daily plan
+                  {generatingPlan ? "Creating daily plan…" : "Create daily plan"}
                 </button>
               </motion.div>
             )}
@@ -500,7 +557,31 @@ export function ItineraryBuilder({
                 >
                   Daily plan preview
                 </h3>
-                {dailyPlan.length === 0 ? (
+                {generatingPlan ? (
+                  <div className="space-y-6 py-8">
+                    <p
+                      className="text-center text-sm"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Creating your daily plan…
+                    </p>
+                    <div className="flex justify-center">
+                      <motion.div
+                        className="w-10 h-10 rounded-full border-4 border-t-transparent"
+                        style={{
+                          borderColor: "var(--accent-green)",
+                          borderTopColor: "transparent",
+                        }}
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : dailyPlan.length === 0 ? (
                   <>
                     <p
                       className="text-sm"
@@ -510,16 +591,20 @@ export function ItineraryBuilder({
                     </p>
                     <button
                       type="button"
-                      onClick={handleScheduleActivities}
+                      onClick={handleCreateDailyPlan}
                       className="w-full py-3 rounded-xl font-medium text-white"
                       style={{ background: "#2d6a4f" }}
                     >
-                      Generate plan
+                      Try generate again
                     </button>
                   </>
                 ) : (
                   <>
-                    <div className="space-y-4 max-h-72 overflow-y-auto">
+                    <div
+                      className={`space-y-4 overflow-y-auto ${
+                        isExpandedPanel ? "max-h-[64vh]" : "max-h-72"
+                      }`}
+                    >
                       {dailyPlan.map((day) => (
                         <div
                           key={day.date}
