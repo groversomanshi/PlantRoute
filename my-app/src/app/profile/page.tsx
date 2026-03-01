@@ -20,5 +20,9 @@ export default async function ProfilePage() {
   const completed = pref?.preferences?.travel?.completed === true;
   if (!completed) redirect("/onboarding");
 
-  return <ProfileClient />;
+  const user = session.user
+    ? { name: session.user.name ?? null, image: session.user.image ?? null }
+    : null;
+
+  return <ProfileClient user={user} />;
 }

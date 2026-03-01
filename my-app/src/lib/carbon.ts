@@ -30,4 +30,10 @@ export const ACTIVITY_FACTORS: Record<string, number> = {
 
 export const HOTEL_FACTOR_PER_NIGHT = 15.0;
 
+/** kg CO₂ absorbed per mature tree per year (used for trees-saved counter). */
+export const KG_PER_TREE = 21;
+
+/** Conservative baseline emission per trip (kg) when computing trees saved. */
+export const BASELINE_PER_TRIP_KG = 100;
+
 export type { Itinerary, CarbonResult };

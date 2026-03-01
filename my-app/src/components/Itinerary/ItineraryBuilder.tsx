@@ -286,8 +286,8 @@ export function ItineraryBuilder({
           typeof window !== "undefined"
             ? window.localStorage.getItem(STORAGE_KEY)
             : null;
-        const list: Itinerary[] = stored ? JSON.parse(stored) : [];
-        if (!list.find((i) => i.id === scored.id)) list.push(scored);
+        const list: (Itinerary & { confirmed?: boolean })[] = stored ? JSON.parse(stored) : [];
+        if (!list.find((i) => i.id === scored.id)) list.push({ ...scored, confirmed: false });
         if (typeof window !== "undefined") {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
         }
@@ -312,6 +312,18 @@ export function ItineraryBuilder({
   ]);
 
   const handleSelectItinerary = (it: Itinerary) => {
+    window.location.href = `/itinerary/${it.id}`;
+  };
+
+  const handleConfirmTrip = (it: Itinerary) => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const list: (Itinerary & { confirmed?: boolean })[] = stored ? JSON.parse(stored) : [];
+    const idx = list.findIndex((i) => i.id === it.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], confirmed: true };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    }
     window.location.href = `/itinerary/${it.id}`;
   };
 
@@ -744,11 +756,21 @@ export function ItineraryBuilder({
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        handleSelectItinerary(finalItinerary)
-                      }
+                      onClick={() => handleConfirmTrip(finalItinerary)}
                       className="w-full py-3 px-4 rounded-xl font-medium text-white"
                       style={{ background: "#2d6a4f" }}
+                    >
+                      Confirm trip
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectItinerary(finalItinerary)}
+                      className="w-full py-2 px-4 rounded-xl text-sm font-medium border"
+                      style={{
+                        borderColor: "var(--border)",
+                        color: "var(--text-muted)",
+                        background: "transparent",
+                      }}
                     >
                       View itinerary
                     </button>
@@ -769,6 +791,14 @@ export function ItineraryBuilder({
           onSwitch={(alt) => {
             setFinalItinerary(alt);
             setRegretItinerary(null);
+            if (typeof window !== "undefined") {
+              const stored = window.localStorage.getItem(STORAGE_KEY);
+              const list: (Itinerary & { confirmed?: boolean })[] = stored ? JSON.parse(stored) : [];
+              const idx = list.findIndex((i) => i.id === alt.id);
+              if (idx >= 0) list[idx] = { ...alt, confirmed: false };
+              else list.push({ ...alt, confirmed: false });
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+            }
           }}
         />
       )}

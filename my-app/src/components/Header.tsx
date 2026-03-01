@@ -67,7 +67,7 @@ export function Header({ useMapbox = false, basemap = "outdoors", onBasemapChang
         className="text-sm font-medium py-2 px-3 rounded-lg hover:bg-black/5"
         style={{ color: "var(--text-primary)" }}
       >
-        Preference
+        Profile
       </Link>
       {session ? (
         <div className="relative" ref={accountMenuRef}>
