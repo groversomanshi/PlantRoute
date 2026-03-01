@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateQuery } from "@/lib/validate";
 import { FlightsQuerySchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { createAmadeusClient } from "@/lib/amadeus";
+import { findRealFlights } from "@/lib/gemini";
 import { getAirportCoords } from "@/lib/airport-coords";
 import { haversine } from "@/lib/haversine";
 import {
@@ -20,8 +20,8 @@ function addDistanceAndEmission(seg: TransportSegment): TransportSegment {
     distance_km = Math.round(distance_km * 100) / 100;
   }
   if (distance_km == null) distance_km = 0;
-  const isLong = distance_km >= 1500;
-  const factor = isLong ? EMISSION_FACTORS.flight_long : EMISSION_FACTORS.flight_short;
+  const mode = distance_km >= 1500 ? "flight_long" : "flight_short";
+  const factor = mode === "flight_long" ? EMISSION_FACTORS.flight_long : EMISSION_FACTORS.flight_short;
   const emission_kg = Math.round(
     distance_km * factor * RADIATIVE_FORCING_MULTIPLIER * 1000
   ) / 1000;
@@ -31,7 +31,7 @@ function addDistanceAndEmission(seg: TransportSegment): TransportSegment {
   const destination = destCoords
     ? { ...seg.destination, lat: destCoords[0], lng: destCoords[1] }
     : seg.destination;
-  return { ...seg, origin, destination, distance_km, emission_kg };
+  return { ...seg, mode, origin, destination, distance_km, emission_kg };
 }
 
 export async function GET(req: NextRequest) {
@@ -57,46 +57,47 @@ export async function GET(req: NextRequest) {
       duration_minutes: 120,
     };
     const segments = [addDistanceAndEmission(raw)];
-    return NextResponse.json({ flights: segments });
+    return NextResponse.json({ flights: segments, source: "fallback_mock" });
   }
 
   try {
-    const amadeus = createAmadeusClient();
-    const response = await amadeus.shopping.flightOffersSearch.get({
-      originLocationCode: origin,
-      destinationLocationCode: destination,
-      departureDate: date,
-      adults: String(adults),
-    });
-    const data = response.data as Array<{
-      id?: string;
-      price?: string;
-      itineraries?: Array<{
-        segments?: Array<{
-          departure?: { iataCode?: string };
-          arrival?: { iataCode?: string };
-          duration?: string;
-        }>;
-      }>;
-    }>;
-    const offers = Array.isArray(data) ? data : [];
-    const rawSegments: TransportSegment[] = offers.slice(0, 5).map((offer, i) => {
-      const seg = offer.itineraries?.[0]?.segments?.[0];
-      const durationMatch = seg?.duration?.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-      const durationMinutes = durationMatch
-        ? (parseInt(durationMatch[1] ?? "0", 10) * 60) + parseInt(durationMatch[2] ?? "0", 10)
-        : 120;
-      return {
-        id: offer.id ?? `flight-${i}`,
-        mode: "flight_short" as const,
-        origin: { lat: 0, lng: 0, name: seg?.departure?.iataCode ?? origin },
-        destination: { lat: 0, lng: 0, name: seg?.arrival?.iataCode ?? destination },
-        price_usd: parseFloat(offer.price ?? "0") || 100,
-        duration_minutes: durationMinutes,
-      };
-    });
-    const segments = rawSegments.map(addDistanceAndEmission);
-    return NextResponse.json({ flights: segments });
+    const flights = await findRealFlights(
+      process.env.GEMINI_API_KEY?.trim() ?? "",
+      origin,
+      destination,
+      date,
+      adults
+    );
+    if (flights.length > 0) {
+      const rawSegments: TransportSegment[] = flights.slice(0, 5).map((flight, i) => {
+        const segmentId = [flight.airline, flight.flight_number, flight.id]
+          .filter(Boolean)
+          .join("-")
+          .replace(/\s+/g, "");
+        return {
+          id: segmentId || `flight-${i}`,
+          mode: "flight_short",
+          origin: { lat: 0, lng: 0, name: flight.origin_iata || origin },
+          destination: { lat: 0, lng: 0, name: flight.destination_iata || destination },
+          price_usd: flight.price_usd > 0 ? flight.price_usd : 150,
+          duration_minutes: flight.duration_minutes > 0 ? flight.duration_minutes : 120,
+          provider: flight.airline,
+        };
+      });
+      const segments = rawSegments.map(addDistanceAndEmission);
+      return NextResponse.json({ flights: segments, source: "real_amadeus" });
+    }
+
+    const raw: TransportSegment = {
+      id: `fallback-flight-${origin}-${destination}`,
+      mode: "flight_short",
+      origin: { lat: 0, lng: 0, name: origin },
+      destination: { lat: 0, lng: 0, name: destination },
+      price_usd: 150,
+      duration_minutes: 120,
+    };
+    const segments = [addDistanceAndEmission(raw)];
+    return NextResponse.json({ flights: segments, source: "fallback_mock" });
   } catch {
     const raw: TransportSegment = {
       id: `fallback-flight-${origin}-${destination}`,
@@ -107,6 +108,7 @@ export async function GET(req: NextRequest) {
       duration_minutes: 120,
     };
     const segments = [addDistanceAndEmission(raw)];
-    return NextResponse.json({ flights: segments });
+    return NextResponse.json({ flights: segments, source: "fallback_mock" });
   }
 }
+

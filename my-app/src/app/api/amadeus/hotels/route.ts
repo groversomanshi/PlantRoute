@@ -3,7 +3,7 @@ import { validateQuery } from "@/lib/validate";
 import { HotelsQuerySchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { geocodeCity } from "@/lib/cities";
-import { createAmadeusClient } from "@/lib/amadeus";
+import { findRealHotels } from "@/lib/gemini";
 import { MOCK_HOTELS } from "@/lib/mocks";
 import { HOTEL_FACTOR_PER_NIGHT } from "@/lib/carbon";
 import type { Hotel } from "@/types";
@@ -42,54 +42,47 @@ export async function GET(req: NextRequest) {
     const sorted = [...hotels].sort(
       (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
     );
-    return NextResponse.json({ hotels: sorted });
+    return NextResponse.json({ hotels: sorted, source: "fallback_mock" });
   }
 
   try {
-    const amadeus = createAmadeusClient();
-    const hotelList = await amadeus.referenceData.locations.hotels.byGeocode.get({
-      latitude: point.lat,
-      longitude: point.lng,
-    });
-    const listData = hotelList.data as Array<{ id?: string; name?: string }>;
-    const hotelIds = (Array.isArray(listData) ? listData : []).slice(0, 5).map((h) => h.id).filter(Boolean).join(",");
-    if (!hotelIds) {
-      const hotels: Hotel[] = MOCK_HOTELS.map((h, i) => ({
-        ...h,
-        id: `fallback-${city}-${i}`,
-        location: { ...point, name: city },
-        emission_kg_per_night: estimateHotelEmission(h.stars),
-      }));
+    const realHotels = await findRealHotels(
+      process.env.GEMINI_API_KEY?.trim() ?? "",
+      city,
+      checkIn,
+      checkOut,
+      1
+    );
+    if (realHotels.length > 0) {
+      const hotels: Hotel[] = realHotels.slice(0, 10).map((h, i) => {
+        const stars = Math.max(1, Math.min(5, Number.isFinite(h.stars) ? Math.round(h.stars) : 4));
+        const hasCoords = Number.isFinite(h.location.lat) && Number.isFinite(h.location.lng);
+        const nightly = h.price_per_night_usd > 0 ? h.price_per_night_usd : 120;
+        return {
+          id: h.id || `real-hotel-${city}-${i}`,
+          name: h.name || "Hotel",
+          location: hasCoords ? h.location : { ...point, name: city },
+          price_per_night_usd: nightly,
+          stars,
+          emission_kg_per_night: estimateHotelEmission(stars),
+        };
+      });
       const sorted = [...hotels].sort(
         (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
       );
-      return NextResponse.json({ hotels: sorted });
+      return NextResponse.json({ hotels: sorted, source: "real_amadeus" });
     }
-    const offers = await amadeus.shopping.hotelOffersSearch.get({
-      hotelIds,
-      adults: "1",
-    });
-    const offersData = (offers.data as Array<{
-      hotel?: { id?: string; name?: string };
-      offers?: Array<{ price?: { total?: string }; room?: { type?: string } }>;
-    }>) ?? [];
-    const nights = Math.max(1, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (24 * 60 * 60 * 1000)));
-    const hotels: Hotel[] = offersData.slice(0, 10).map((o, i) => {
-      const total = parseFloat(o.offers?.[0]?.price?.total ?? "0") || 100 * nights;
-      const stars = 4;
-      return {
-        id: o.hotel?.id ?? `amadeus-hotel-${i}`,
-        name: o.hotel?.name ?? "Hotel",
-        location: { ...point, name: city },
-        price_per_night_usd: total / nights,
-        stars,
-        emission_kg_per_night: estimateHotelEmission(stars),
-      };
-    });
-    const sorted = [...hotels].sort(
+
+    const fallbackHotels: Hotel[] = MOCK_HOTELS.map((h, i) => ({
+      ...h,
+      id: `fallback-${city}-${i}`,
+      location: { ...point, name: city },
+      emission_kg_per_night: estimateHotelEmission(h.stars),
+    }));
+    const sorted = [...fallbackHotels].sort(
       (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
     );
-    return NextResponse.json({ hotels: sorted });
+    return NextResponse.json({ hotels: sorted, source: "fallback_mock" });
   } catch {
     const hotels: Hotel[] = MOCK_HOTELS.map((h, i) => ({
       ...h,
@@ -100,6 +93,6 @@ export async function GET(req: NextRequest) {
     const sorted = [...hotels].sort(
       (a, b) => (a.emission_kg_per_night ?? 15) - (b.emission_kg_per_night ?? 15)
     );
-    return NextResponse.json({ hotels: sorted });
+    return NextResponse.json({ hotels: sorted, source: "fallback_mock" });
   }
 }

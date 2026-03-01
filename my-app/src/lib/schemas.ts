@@ -79,8 +79,8 @@ export const HotelsQuerySchema = z.object({
 });
 
 export const FlightsQuerySchema = z.object({
-  origin: z.string().length(3),
-  destination: z.string().length(3),
+  origin: z.string().min(1).max(100).trim(),
+  destination: z.string().min(1).max(100).trim(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   adults: z.coerce.number().int().min(1).max(9).default(1),
 });

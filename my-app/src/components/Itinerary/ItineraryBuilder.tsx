@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, ArrowLeft } from "lucide-react";
 import type { GeoPoint } from "@/types";
 import type {
   Itinerary,
@@ -14,8 +14,6 @@ import type {
 } from "@/types";
 import { scoreItinerary } from "@/lib/interest-scorer";
 import { applyCarbonResult } from "@/lib/apply-carbon";
-import { geocodeCity } from "@/lib/cities";
-import { getCityIata } from "@/lib/airport-coords";
 import { HotelSelector } from "./HotelSelector";
 import { ActivitySelector } from "./ActivitySelector";
 import { TravelOptionsPanel } from "./TravelOptionsPanel";
@@ -60,13 +58,14 @@ export function ItineraryBuilder({
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [hotelSuggestionReason, setHotelSuggestionReason] = useState<string | null>(null);
   const [loadingFlights, setLoadingFlights] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
   const [building, setBuilding] = useState(false);
   const [finalItinerary, setFinalItinerary] = useState<Itinerary | null>(null);
   const [regretItinerary, setRegretItinerary] = useState<Itinerary | null>(null);
   const [originalItineraryForRegret, setOriginalItineraryForRegret] = useState<Itinerary | null>(null);
 
   const cityName = city.name.split(",")[0]?.trim() ?? city.name;
-  const destIata = getCityIata(cityName);
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   const prefs: UserPreferences = preferences ?? {
     interests: ["culture", "outdoor"],
@@ -126,8 +125,6 @@ export function ItineraryBuilder({
     }
   }, [step, cityName, startDate, endDate]);
 
-  const interestsParam = (preferences?.interests ?? ["culture", "outdoor"]).join(",");
-
   useEffect(() => {
     if (startDate && startDate < todayIso) {
       setStartDate(todayIso);
@@ -158,13 +155,14 @@ export function ItineraryBuilder({
   useEffect(() => {
     if (step === 5 && startDate && endDate) {
       setLoadingFlights(true);
+      const destinationQuery = encodeURIComponent(cityName);
       Promise.all([
         fetch(
-          `/api/amadeus/flights?origin=ORD&destination=${destIata}&date=${startDate}&adults=1`,
+          `/api/amadeus/flights?origin=ORD&destination=${destinationQuery}&date=${startDate}&adults=1`,
           { signal: AbortSignal.timeout(10000) }
         ).then((r) => r.json()),
         fetch(
-          `/api/amadeus/flights?origin=${destIata}&destination=ORD&date=${endDate}&adults=1`,
+          `/api/amadeus/flights?origin=${destinationQuery}&destination=ORD&date=${endDate}&adults=1`,
           { signal: AbortSignal.timeout(10000) }
         ).then((r) => r.json()),
       ])
@@ -178,7 +176,7 @@ export function ItineraryBuilder({
         })
         .finally(() => setLoadingFlights(false));
     }
-  }, [step, startDate, endDate, destIata]);
+  }, [step, startDate, endDate, cityName]);
 
 
   const handleActivityToggle = useCallback((activity: Activity) => {
@@ -216,7 +214,7 @@ export function ItineraryBuilder({
   ]);
 
   const handleCreateDailyPlan = useCallback(async () => {
-    setStep(5);
+    setStep(4);
     setGeneratingPlan(true);
     try {
       await handleScheduleActivities();
@@ -353,11 +351,11 @@ export function ItineraryBuilder({
                 }}
                 aria-label={
                   step === 5
-                    ? "Back to activities"
+                    ? "Back to daily plan"
                     : step === 4
                       ? "Back to hotels"
                       : step === 3
-                        ? "Back to preferences"
+                        ? "Back to activities"
                         : "Back to dates"
                 }
               >
@@ -396,7 +394,7 @@ export function ItineraryBuilder({
                   className="text-sm"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Pick your dates
+                  1. Pick your dates
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <label className="block">
@@ -454,7 +452,7 @@ export function ItineraryBuilder({
                   className="font-medium"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  1. Choose activities
+                  2. Choose activities
                 </h3>
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                   Ranked by your interests and low carbon.
@@ -491,7 +489,7 @@ export function ItineraryBuilder({
                   className="font-medium"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  2. Choose your hotel
+                  3. Choose your hotel
                 </h3>
                 {hotelSuggestionReason && (
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -522,47 +520,13 @@ export function ItineraryBuilder({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="space-y-4 min-h-[72vh] flex flex-col"
-              >
-                <h3
-                  className="font-medium"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  2. Choose activities
-                </h3>
-                <div className="flex-1 min-h-0">
-                  <ActivitySelector
-                    activities={activities}
-                    selectedIds={selectedActivityIds}
-                    onToggle={handleActivityToggle}
-                    loading={loadingActivities}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCreateDailyPlan}
-                  disabled={selectedActivityIds.size === 0 || generatingPlan}
-                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50 mt-auto"
-                  style={{ background: "#2d6a4f" }}
-                >
-                  {generatingPlan ? "Creating daily plan…" : "Create daily plan"}
-                </button>
-              </motion.div>
-            )}
-
-            {step === 5 && (
-              <motion.div
-                key="step5"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
                 className="space-y-4"
               >
                 <h3
                   className="font-medium"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  Daily plan preview
+                  4. Daily plan preview
                 </h3>
                 {dailyPlan.length === 0 ? (
                   <>
@@ -652,7 +616,7 @@ export function ItineraryBuilder({
                   className="font-medium"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  Travel options
+                  5. Travel options
                 </h3>
                 <TravelOptionsPanel
                   arrivalOptions={arrivalOptions}

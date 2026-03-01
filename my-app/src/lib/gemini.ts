@@ -1,5 +1,36 @@
 import type { UserPreferences } from "@/types";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from '@google/genai';
+import { createAmadeusClient } from "./amadeus";
+import { CITY_TO_IATA } from "./airport-coords";
+
+const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+] as const;
+
+async function generateWithModelFallback(
+  genAI: GoogleGenAI,
+  input: {
+    contents: Array<{ role: "user"; parts: Array<{ text: string }> }>;
+    config?: { systemInstruction?: { parts: Array<{ text: string }> } };
+  }
+): Promise<string> {
+  for (const model of GEMINI_MODELS) {
+    try {
+      const result = await genAI.models.generateContent({
+        model,
+        contents: input.contents,
+        config: input.config,
+      });
+      const raw = result.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (raw.trim()) return raw;
+    } catch {
+      // Try next model and gracefully fall back if none are available.
+    }
+  }
+  return "";
+}
 
 const SYSTEM_PROMPT = `You are a travel preference parser. Output ONLY valid JSON matching this schema (no markdown, no code fences):
 {
@@ -15,14 +46,13 @@ export async function parsePreferencesWithGemini(
   apiKey: string,
   text: string
 ): Promise<UserPreferences> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent({
+  const genAI = new GoogleGenAI({ apiKey });
+  const raw = await generateWithModelFallback(genAI, {
     contents: [{ role: "user", parts: [{ text }] }],
-    systemInstruction: SYSTEM_PROMPT,
+    config: {
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    },
   });
-  const response = result.response;
-  const raw = response.text();
   if (!raw?.trim()) {
     return fallbackParsePreferences(text);
   }
@@ -68,8 +98,7 @@ export async function suggestHotelByProximity(
   if (hotels.length === 1) {
     return { hotelId: hotels[0]!.id, reason: "Only one hotel available." };
   }
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const genAI = new GoogleGenAI({ apiKey });
   const attractionList = selectedAttractions
     .map((a) => `${a.name} (${a.location.name ?? city})`)
     .join(", ");
@@ -82,10 +111,9 @@ ${hotelList}
 Which hotel is best for proximity to these attractions (most central / convenient base)? Reply with ONLY valid JSON, no markdown:
 { "hotelId": "<exact id from the list>", "reason": "<one short sentence>" }`;
 
-  const result = await model.generateContent({
+  const raw = await generateWithModelFallback(genAI, {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
-  const raw = result.response.text();
   if (!raw?.trim()) {
     return { hotelId: hotels[0]!.id, reason: "Central option for your stay." };
   }
@@ -102,6 +130,239 @@ Which hotel is best for proximity to these attractions (most central / convenien
     return { hotelId: hotels[0]!.id, reason: "Central option for your stay." };
   }
 }
+
+/**
+ * Find real hotels using the Amadeus API.
+ */
+export async function findRealHotels(
+  apiKey: string,
+  city: string,
+  checkIn?: string,
+  checkOut?: string,
+  adults = 1
+): Promise<Array<{ id: string; name: string; description: string; price_per_night_usd: number; stars: number; location: { lat: number; lng: number; name: string } }>> {
+    void apiKey;
+    const amadeus = createAmadeusClient();
+
+    try {
+        const cityCode =
+          /^[A-Za-z]{3}$/.test(city)
+            ? city.toUpperCase()
+            : (await amadeus.referenceData.locations.cities.get({ keyword: city })).data[0]?.iataCode;
+
+        if (!cityCode) {
+            console.error("Could not find city code for", city);
+            return [];
+        }
+
+        const hotelsResponse = await amadeus.referenceData.locations.hotels.byCity.get({ cityCode });
+        const baseHotels = Array.isArray(hotelsResponse.data) ? hotelsResponse.data : [];
+        const hotelIds = baseHotels
+          .map((hotel: any) => hotel.hotelId ?? hotel.id)
+          .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+          .slice(0, 12);
+        if (hotelIds.length === 0) return [];
+
+        const nights =
+          checkIn && checkOut
+            ? Math.max(
+                1,
+                Math.ceil(
+                  (new Date(checkOut).getTime() - new Date(checkIn).getTime()) /
+                    (24 * 60 * 60 * 1000)
+                )
+              )
+            : 1;
+
+        const offerParams: Record<string, string> = {
+          hotelIds: hotelIds.join(","),
+          adults: String(Math.max(1, adults)),
+        };
+        if (checkIn) offerParams.checkInDate = checkIn;
+        if (checkOut) offerParams.checkOutDate = checkOut;
+
+        const offersResponse = await amadeus.shopping.hotelOffersSearch.get(offerParams as any);
+        const offers = Array.isArray(offersResponse.data) ? offersResponse.data : [];
+
+        const directoryHotels = baseHotels.slice(0, 20).map((hotel: any, i: number) => {
+          const name = String(hotel?.name ?? "Hotel");
+          const lat = Number(hotel?.geoCode?.latitude ?? 0);
+          const lng = Number(hotel?.geoCode?.longitude ?? 0);
+          const starsRaw = Number(hotel?.rating);
+          const stars =
+            Number.isFinite(starsRaw) && starsRaw > 0
+              ? Math.max(1, Math.min(5, Math.round(starsRaw)))
+              : 4;
+          return {
+            id: String(hotel?.hotelId ?? hotel?.id ?? `hotel-dir-${i}`),
+            name,
+            description: "Amadeus hotel directory listing (price unavailable)",
+            price_per_night_usd: 0,
+            stars,
+            location: {
+              lat: Number.isFinite(lat) ? lat : 0,
+              lng: Number.isFinite(lng) ? lng : 0,
+              name,
+            },
+          };
+        });
+
+        const offerHotels = offers.map((offer: any, i: number) => {
+          const total = parseFloat(offer?.offers?.[0]?.price?.total ?? "0");
+          const starsRaw = Number(offer?.hotel?.rating);
+          const stars =
+            Number.isFinite(starsRaw) && starsRaw > 0
+              ? Math.max(1, Math.min(5, Math.round(starsRaw)))
+              : 4;
+          const lat = Number(offer?.hotel?.latitude ?? offer?.hotel?.geoCode?.latitude ?? 0);
+          const lng = Number(offer?.hotel?.longitude ?? offer?.hotel?.geoCode?.longitude ?? 0);
+          const name = String(offer?.hotel?.name ?? "Hotel");
+          return {
+            id: String(offer?.hotel?.hotelId ?? offer?.hotel?.id ?? `hotel-${i}`),
+            name,
+            description: "Real-time hotel offer from Amadeus",
+            price_per_night_usd: total > 0 ? total / nights : 0,
+            stars,
+            location: {
+              lat: Number.isFinite(lat) ? lat : 0,
+              lng: Number.isFinite(lng) ? lng : 0,
+              name,
+            },
+          };
+        });
+
+        // Prefer priced offers, then fill with real directory hotels so UI has multiple options.
+        if (offerHotels.length > 0) {
+          const seen = new Set<string>(offerHotels.map((h) => h.id));
+          const merged = [
+            ...offerHotels,
+            ...directoryHotels.filter((h) => !seen.has(h.id)),
+          ];
+          return merged.slice(0, 10);
+        }
+
+        // If priced offers are unavailable, still return real hotels from Amadeus by-city directory.
+        return directoryHotels.slice(0, 10);
+    } catch (e) {
+        console.error("Failed to find real hotels with Amadeus:", e);
+        return [];
+    }
+}
+
+/**
+ * Find real flight options using the Amadeus API.
+ */
+export async function findRealFlights(
+  apiKey: string,
+  origin: string,
+  destination: string,
+  date: string,
+  adults = 1
+): Promise<Array<{ id: string; airline: string; flight_number: string; departure_time: string; arrival_time: string; origin_iata: string; destination_iata: string; price_usd: number; duration_minutes: number }>> {
+    void apiKey;
+    const amadeus = createAmadeusClient();
+
+    try {
+        const toDate = (value: string) => new Date(`${value}T00:00:00Z`);
+        const formatDate = (d: Date) => d.toISOString().slice(0, 10);
+        const shiftDate = (value: string, offsetDays: number) => {
+          const d = toDate(value);
+          d.setUTCDate(d.getUTCDate() + offsetDays);
+          return formatDate(d);
+        };
+
+        const resolveCode = async (value: string) => {
+          if (/^[A-Za-z]{3}$/.test(value)) return value.toUpperCase();
+          const normalized = value.trim().toLowerCase();
+          const mapped = CITY_TO_IATA[normalized];
+          if (mapped) return mapped;
+
+          const locationResponse = await amadeus.referenceData.locations.get({
+            keyword: value,
+            subType: "CITY,AIRPORT",
+          });
+          const locationCode = locationResponse.data[0]?.iataCode as string | undefined;
+          if (locationCode) return locationCode;
+
+          const airportResponse = await amadeus.referenceData.locations.get({
+            keyword: value,
+            subType: "AIRPORT",
+          });
+          const airportCode = airportResponse.data[0]?.iataCode as string | undefined;
+          if (airportCode) return airportCode;
+
+          try {
+            const cityResponse = await amadeus.referenceData.locations.cities.get({
+              keyword: value,
+              include: "AIRPORTS",
+            });
+            return cityResponse.data[0]?.iataCode as string | undefined;
+          } catch {
+            const cityResponse = await amadeus.referenceData.locations.cities.get({
+              keyword: value,
+            });
+            return cityResponse.data[0]?.iataCode as string | undefined;
+          }
+        };
+
+        const [originCode, destinationCode] = await Promise.all([
+          resolveCode(origin),
+          resolveCode(destination),
+        ]);
+
+        if (!originCode || !destinationCode) {
+            console.error("Could not find airport codes for the given locations");
+            return [];
+        }
+
+        const candidateDates = [date, shiftDate(date, 1), shiftDate(date, -1)];
+        let offersData: any[] = [];
+        for (const candidateDate of candidateDates) {
+          const flightOffersResponse = await amadeus.shopping.flightOffersSearch.get({
+            originLocationCode: originCode,
+            destinationLocationCode: destinationCode,
+            departureDate: candidateDate,
+            adults: String(Math.max(1, adults)),
+            currencyCode: "USD",
+          });
+          offersData = Array.isArray(flightOffersResponse.data) ? flightOffersResponse.data : [];
+          if (offersData.length > 0) break;
+        }
+        if (offersData.length === 0) return [];
+
+        const parseDurationToMinutes = (isoDuration: string | undefined): number => {
+          const match = isoDuration?.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+          if (!match) return 0;
+          const hours = parseInt(match[1] ?? "0", 10);
+          const minutes = parseInt(match[2] ?? "0", 10);
+          return hours * 60 + minutes;
+        };
+
+        return offersData.map((offer: any) => ({
+            id: String(offer.id ?? crypto.randomUUID()),
+            airline: String(offer.validatingAirlineCodes?.[0] ?? offer.itineraries?.[0]?.segments?.[0]?.carrierCode ?? "Unknown"),
+            flight_number: String(
+              offer.itineraries?.[0]?.segments?.[0]?.number
+                ? `${offer.itineraries?.[0]?.segments?.[0]?.carrierCode ?? ""}${offer.itineraries?.[0]?.segments?.[0]?.number}`
+                : "N/A"
+            ),
+            departure_time: String(offer.itineraries?.[0]?.segments?.[0]?.departure?.at ?? ""),
+            arrival_time: String(
+              offer.itineraries?.[0]?.segments?.[offer.itineraries?.[0]?.segments?.length - 1]?.arrival?.at ?? ""
+            ),
+            origin_iata: String(offer.itineraries?.[0]?.segments?.[0]?.departure?.iataCode ?? originCode),
+            destination_iata: String(
+              offer.itineraries?.[0]?.segments?.[offer.itineraries?.[0]?.segments?.length - 1]?.arrival?.iataCode ?? destinationCode
+            ),
+            price_usd: parseFloat(String(offer.price?.total ?? "0")) || 0,
+            duration_minutes: parseDurationToMinutes(offer.itineraries?.[0]?.duration) || 120,
+        }));
+    } catch (e) {
+        console.error("Failed to find real flights with Amadeus:", e);
+        return [];
+    }
+}
+
 
 /** Simple keyword-based fallback when Gemini is not configured. */
 export function fallbackParsePreferences(text: string): UserPreferences {
