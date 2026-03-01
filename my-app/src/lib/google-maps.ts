@@ -6,12 +6,16 @@
 
 const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const PLACES_NEARBY_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json";
+const PLACE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
 
 const COORD_CACHE = new Map<string, { lat: number; lng: number }>();
 const DEFAULT_RADIUS_M = 5000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const PLACES_CACHE = new Map<string, { data: unknown[]; ts: number }>();
 const PLACES_CACHE_TTL_MS = 60 * 1000;
+const DETAILS_CACHE = new Map<string, { data: PlaceDetailsResult; ts: number }>();
+const DETAILS_CACHE_TTL_MS = 5 * 60 * 1000;
+const DETAILS_FIELDS = "price_level,rating,user_ratings_total,photos,vicinity";
 
 function getApiKey(): string | null {
   const key =
@@ -61,6 +65,17 @@ export async function geocodeWithGoogle(city: string): Promise<GeocodeResult | n
   }
 }
 
+const PLACE_PHOTO_BASE = "https://maps.googleapis.com/maps/api/place/photo";
+
+/** Result from Place Details API (subset we use). */
+export interface PlaceDetailsResult {
+  price_level?: number;
+  rating?: number;
+  user_ratings_total?: number;
+  photo_reference?: string;
+  vicinity?: string;
+}
+
 export interface PlaceResult {
   place_id: string;
   name: string;
@@ -68,8 +83,67 @@ export interface PlaceResult {
   lng: number;
   rating?: number;
   price_level?: number;
+  user_ratings_total?: number;
   types: string[];
   vicinity?: string;
+  photo_reference?: string;
+  /** URL for first photo (maxwidth=800). Built from photo_reference when present. */
+  photo_url?: string;
+}
+
+/** price_level (0–4) → estimated USD (midpoint of range for display). */
+function priceLevelToEstimateUsd(level?: number): number | undefined {
+  if (level == null || level < 0 || level > 4) return undefined;
+  const map: Record<number, number> = { 0: 15, 1: 40, 2: 85, 3: 175, 4: 350 };
+  return map[level];
+}
+
+/** price_level (0–4) → $ to $$$$$. */
+function priceLevelToTier(level?: number): string | undefined {
+  if (level == null || level < 0 || level > 4) return undefined;
+  return ["$", "$$", "$$$", "$$$$", "$$$$$"][level];
+}
+
+/**
+ * Fetch Place Details for a single place_id. Returns null on failure (fail silently).
+ * Cached briefly to avoid duplicate requests.
+ */
+export async function fetchPlaceDetails(placeId: string): Promise<PlaceDetailsResult | null> {
+  if (!placeId) return null;
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+
+  const cached = DETAILS_CACHE.get(placeId);
+  if (cached && Date.now() - cached.ts < DETAILS_CACHE_TTL_MS) return cached.data;
+
+  try {
+    const url = `${PLACE_DETAILS_URL}?place_id=${encodeURIComponent(placeId)}&fields=${encodeURIComponent(DETAILS_FIELDS)}&key=${apiKey}`;
+    const res = await fetch(url, { next: { revalidate: 0 } });
+    const data = (await res.json()) as {
+      status: string;
+      result?: {
+        price_level?: number;
+        rating?: number;
+        user_ratings_total?: number;
+        photos?: Array<{ photo_reference?: string }>;
+        vicinity?: string;
+      };
+    };
+    if (data.status !== "OK" || !data.result) return null;
+    const r = data.result;
+    const photo_reference = r.photos?.[0]?.photo_reference;
+    const out: PlaceDetailsResult = {
+      price_level: r.price_level,
+      rating: r.rating,
+      user_ratings_total: r.user_ratings_total,
+      photo_reference,
+      vicinity: r.vicinity,
+    };
+    DETAILS_CACHE.set(placeId, { data: out, ts: Date.now() });
+    return out;
+  } catch {
+    return null;
+  }
 }
 
 function placesCacheKey(lat: number, lng: number, type: string): string {
@@ -108,21 +182,53 @@ export async function fetchNearbyPlaces(
         price_level?: number;
         types?: string[];
         vicinity?: string;
+        photos?: Array<{ photo_reference?: string }>;
       }>;
     };
     if (data.status !== "OK" && data.status !== "ZERO_RESULTS") return [];
-    const results = (data.results ?? []).map((r) => ({
-      place_id: r.place_id ?? "",
-      name: r.name ?? "Place",
-      lat: Number(r.geometry?.location?.lat) || lat,
-      lng: Number(r.geometry?.location?.lng) || lng,
-      rating: r.rating,
-      price_level: r.price_level,
-      types: r.types ?? [],
-      vicinity: r.vicinity,
-    }));
-    PLACES_CACHE.set(cacheKey, { data: results, ts: Date.now() });
-    return results;
+    const rawList = (data.results ?? []).map((r) => {
+      const photoRef = r.photos?.[0]?.photo_reference;
+      const photo_url =
+        apiKey && photoRef
+          ? `${PLACE_PHOTO_BASE}?maxwidth=800&photo_reference=${encodeURIComponent(photoRef)}&key=${apiKey}`
+          : undefined;
+      return {
+        place_id: r.place_id ?? "",
+        name: r.name ?? "Place",
+        lat: Number(r.geometry?.location?.lat) || lat,
+        lng: Number(r.geometry?.location?.lng) || lng,
+        rating: r.rating,
+        price_level: r.price_level,
+        types: r.types ?? [],
+        vicinity: r.vicinity,
+        photo_reference: photoRef,
+        photo_url,
+      };
+    });
+
+    const withDetails = await Promise.all(
+      rawList.map(async (p) => {
+        const details = await fetchPlaceDetails(p.place_id);
+        if (!details) return p;
+        const photoRef = details.photo_reference ?? p.photo_reference;
+        const photo_url =
+          apiKey && photoRef
+            ? `${PLACE_PHOTO_BASE}?maxwidth=800&photo_reference=${encodeURIComponent(photoRef)}&key=${apiKey}`
+            : p.photo_url;
+        return {
+          ...p,
+          rating: details.rating ?? p.rating,
+          price_level: details.price_level ?? p.price_level,
+          user_ratings_total: details.user_ratings_total,
+          vicinity: details.vicinity ?? p.vicinity,
+          photo_reference: photoRef ?? p.photo_reference,
+          photo_url,
+        };
+      })
+    );
+
+    PLACES_CACHE.set(cacheKey, { data: withDetails, ts: Date.now() });
+    return withDetails;
   } catch {
     return [];
   }
@@ -149,8 +255,13 @@ function toNormalizedPlace(p: PlaceResult, type: "hotel" | "attraction"): Normal
     lng: p.lng,
     rating: p.rating,
     price_level: p.price_level,
+    price_estimate_usd: priceLevelToEstimateUsd(p.price_level),
+    price_tier: priceLevelToTier(p.price_level),
+    user_ratings_total: p.user_ratings_total,
     vicinity: p.vicinity,
     type,
+    photo_reference: p.photo_reference,
+    photo_url: p.photo_url,
   };
 }
 

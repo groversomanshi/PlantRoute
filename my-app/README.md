@@ -1,4 +1,4 @@
-# PlantRoute — AI-powered sustainable travel
+# PlantRoute — AI-Powered Sustainable Travel
 
 Build travel itineraries with carbon impact. Pick a destination on the map, describe what you love, and get a full trip with emissions for every item.
 

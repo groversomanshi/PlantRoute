@@ -44,6 +44,10 @@ export async function GET(req: NextRequest) {
   if (validated.error) return validated.error;
 
   const { origin, destination, date, adults } = validated.data;
+
+  /** One-way Expedia flight search URL for this route (actual distances/prices). */
+  const expediaSearchUrl = `https://www.expedia.com/Flights-Search?trip=oneway&leg1=from:${encodeURIComponent(origin)},to:${encodeURIComponent(destination)},departure:${date}TANYT&passengers=adults:${adults ?? 1},children:0,seniors:0,infantinlap:Y&options=cabinclass%3Aeconomy&mode=search`;
+
   const hasAmadeus =
     process.env.AMADEUS_API_KEY?.trim() && process.env.AMADEUS_API_SECRET?.trim();
 
@@ -55,6 +59,7 @@ export async function GET(req: NextRequest) {
       destination: { lat: 0, lng: 0, name: destination },
       price_usd: 150,
       duration_minutes: 120,
+      search_url: expediaSearchUrl,
     };
     const segments = [addDistanceAndEmission(raw)];
     return NextResponse.json({ flights: segments, source: "fallback_mock" });
@@ -82,6 +87,7 @@ export async function GET(req: NextRequest) {
           price_usd: flight.price_usd > 0 ? flight.price_usd : 150,
           duration_minutes: flight.duration_minutes > 0 ? flight.duration_minutes : 120,
           provider: flight.airline,
+          search_url: expediaSearchUrl,
         };
       });
       const segments = rawSegments.map(addDistanceAndEmission);
@@ -95,6 +101,7 @@ export async function GET(req: NextRequest) {
       destination: { lat: 0, lng: 0, name: destination },
       price_usd: 150,
       duration_minutes: 120,
+      search_url: expediaSearchUrl,
     };
     const segments = [addDistanceAndEmission(raw)];
     return NextResponse.json({ flights: segments, source: "fallback_mock" });
@@ -106,6 +113,7 @@ export async function GET(req: NextRequest) {
       destination: { lat: 0, lng: 0, name: destination },
       price_usd: 150,
       duration_minutes: 120,
+      search_url: expediaSearchUrl,
     };
     const segments = [addDistanceAndEmission(raw)];
     return NextResponse.json({ flights: segments, source: "fallback_mock" });

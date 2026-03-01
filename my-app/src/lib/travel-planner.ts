@@ -32,6 +32,9 @@ export async function fetchFlightData(
     findRealFlights(apiKey, destination, origin, endDate, adults),
   ]);
 
+  const expediaUrl = (from: string, to: string, date: string) =>
+    `https://www.expedia.com/Flights-Search?trip=oneway&leg1=from:${encodeURIComponent(from)},to:${encodeURIComponent(to)},departure:${date}TANYT&passengers=adults:1,children:0,seniors:0,infantinlap:Y&options=cabinclass%3Aeconomy&mode=search`;
+
   const toOption = (
     f: {
       id: string;
@@ -53,6 +56,7 @@ export async function fetchFlightData(
       price_usd: f.price_usd,
       duration_minutes: f.duration_minutes,
       provider: f.airline,
+      search_url: expediaUrl(f.origin_iata, f.destination_iata, date),
     };
     const withEmission = addDistanceAndEmission(segment);
     return {
@@ -84,6 +88,7 @@ export async function fetchFlightData(
               destination: { lat: 0, lng: 0, name: destination },
               price_usd: 150,
               duration_minutes: 120,
+              search_url: expediaUrl(origin, destination, startDate),
             }),
           },
         ];
@@ -106,6 +111,7 @@ export async function fetchFlightData(
               destination: { lat: 0, lng: 0, name: origin },
               price_usd: 150,
               duration_minutes: 120,
+              search_url: expediaUrl(destination, origin, endDate),
             }),
           },
         ];

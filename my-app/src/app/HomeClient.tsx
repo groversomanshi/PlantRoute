@@ -100,7 +100,7 @@ export function HomeClient({ useMapbox }: HomeClientProps) {
                   PlantRoute
                 </h1>
                 <p className="text-white/90 text-sm md:text-base text-center mt-0.5">
-                  AI-powered sustainable travel
+                  AI-Powered Sustainable Travel
                 </p>
               </div>
               <div className="w-full max-w-2xl pointer-events-auto">

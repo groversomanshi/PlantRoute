@@ -50,7 +50,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
             {activity.name}
           </h3>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {activity.duration_hours}h · {formatPrice(activity.price_usd)}
+            {activity.duration_hours}h · {activity.price_tier ?? formatPrice(activity.price_usd)}
           </p>
           <div className="mt-2">
             <CarbonBadge kg={emission} />

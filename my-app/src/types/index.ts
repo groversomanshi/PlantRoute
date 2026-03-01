@@ -32,8 +32,16 @@ export interface NormalizedPlace {
   lng: number;
   rating?: number;
   price_level?: number;
+  /** Estimated USD from price_level (0–4); midpoint of range for display. */
+  price_estimate_usd?: number;
+  /** $ to $$$$$ from price_level. */
+  price_tier?: string;
+  user_ratings_total?: number;
   vicinity?: string;
   type: "hotel" | "attraction";
+  photo_reference?: string;
+  /** URL for first photo (maxwidth=800). Use for display; also mapped to Activity.image_url. */
+  photo_url?: string;
 }
 
 export interface TransportSegment {
@@ -46,6 +54,8 @@ export interface TransportSegment {
   price_usd: number;
   duration_minutes: number;
   provider?: string;
+  /** For flights: link to Expedia flight search (origin, destination, date) for actual distances/prices. */
+  search_url?: string;
 }
 
 export interface Activity {
@@ -59,6 +69,8 @@ export interface Activity {
   interest_score?: number;
   amadeus_id?: string;
   image_url?: string;
+  /** Price tier for display only, e.g. "$", "$$", "$$$" (no actual amount). */
+  price_tier?: string;
 }
 
 export interface Hotel {
@@ -69,6 +81,7 @@ export interface Hotel {
   stars: number;
   emission_kg_per_night?: number;
   amadeus_id?: string;
+  image_url?: string;
 }
 
 export interface ItineraryDay {

@@ -3,7 +3,7 @@
 import type { TransportSegment } from "@/types";
 import { CarbonBadge } from "@/components/UI/CarbonBadge";
 import { formatPrice } from "@/lib/utils";
-import { Plane, Train, Bus, Car, Ship, Footprints } from "lucide-react";
+import { Plane, Train, Bus, Car, Ship, Footprints, ExternalLink } from "lucide-react";
 
 const modeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   flight_short: Plane,
@@ -46,6 +46,18 @@ export function TransportCard({ segment }: TransportCardProps) {
         <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
           {segment.distance_km != null ? `${segment.distance_km.toFixed(0)} km` : ""} · {Math.floor(durationMin / 60)}h {durationMin % 60}m
         </p>
+        {(segment.mode === "flight_short" || segment.mode === "flight_long") && segment.search_url && (
+          <a
+            href={segment.search_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs mt-1 font-medium hover:underline"
+            style={{ color: "var(--accent-green)" }}
+          >
+            View on Expedia (distance & prices)
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <CarbonBadge kg={emission} />

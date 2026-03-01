@@ -396,7 +396,12 @@ export default function ItineraryDetailPage() {
               {/* Hotel section */}
               {day.hotel && (
                 <div className="mb-4 p-3 rounded-xl flex items-center justify-between gap-2" style={{ background: "var(--bg-surface)", borderLeft: "4px solid var(--accent-green-mid)" }}>
-                  <div>
+                  {day.hotel.image_url && (
+                    <div className="w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden bg-gray-200">
+                      <img src={day.hotel.image_url} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm">Hotel: {day.hotel.name}</p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                       {formatPrice(day.hotel.price_per_night_usd)}/night

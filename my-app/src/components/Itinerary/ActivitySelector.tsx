@@ -117,7 +117,7 @@ export function ActivitySelector({
                   )}
                 </div>
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  {activity.duration_hours}h · {formatPrice(activity.price_usd)}
+                  {activity.duration_hours}h · {activity.price_tier ?? formatPrice(activity.price_usd)}
                 </p>
                 <div className="mt-1">
                   <CarbonBadge kg={emission} />

@@ -136,7 +136,7 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
                         {act.name}
                       </p>
                       <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        {formatPrice(act.price_usd)} · {act.duration_hours}h
+                        {act.price_tier ?? formatPrice(act.price_usd)} · {act.duration_hours}h
                       </p>
                     </div>
                   </div>

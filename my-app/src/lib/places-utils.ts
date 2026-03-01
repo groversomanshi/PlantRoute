@@ -28,6 +28,7 @@ export function normalizedPlaceToHotel(p: NormalizedPlace, cityName: string): Ho
     location: { lat: p.lat, lng: p.lng, name: cityName },
     price_per_night_usd: priceLevelToNightly(p.price_level),
     stars,
+    image_url: p.photo_url,
   };
 }
 
@@ -37,8 +38,10 @@ export function normalizedPlaceToActivity(p: NormalizedPlace, cityName: string):
     name: p.name,
     category: "sightseeing",
     location: { lat: p.lat, lng: p.lng, name: cityName },
-    price_usd: priceLevelToUsd(p.price_level),
+    price_usd: 0,
     duration_hours: 1.5,
     interest_score: p.rating != null ? p.rating / 5 : undefined,
+    image_url: p.photo_url,
+    price_tier: p.price_tier,
   };
 }
