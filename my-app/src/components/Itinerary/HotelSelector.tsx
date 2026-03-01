@@ -43,7 +43,7 @@ export function HotelSelector({
       <p className="text-sm" style={{ color: "var(--text-muted)" }}>
         Choose your hotel. Lower-carbon options are shown first.
       </p>
-      <div className="space-y-3 max-h-80 overflow-y-auto px-1 py-1">
+      <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
         {hotels.map((hotel) => {
           const isSelected = selectedHotel?.id === hotel.id;
           const emission = hotel.emission_kg_per_night ?? 15;
@@ -54,9 +54,9 @@ export function HotelSelector({
               key={hotel.id}
               type="button"
               onClick={() => onSelect(hotel)}
-              whileHover={{ scale: 1.01, zIndex: 10 }}
+              whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
-              className="relative w-full text-left rounded-xl p-4 border-2 transition-colors"
+              className="w-full text-left rounded-xl p-4 border-2 transition-colors"
               style={{
                 background: isSelected ? "var(--accent-green-light)" : "var(--bg-elevated)",
                 borderColor: isSelected ? "var(--accent-green)" : "var(--border)",

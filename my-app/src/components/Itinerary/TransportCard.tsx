@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { TransportSegment } from "@/types";
 import { CarbonBadge } from "@/components/UI/CarbonBadge";
 import { formatPrice } from "@/lib/utils";
@@ -26,8 +25,7 @@ export function TransportCard({ segment }: TransportCardProps) {
   const durationMin = segment.duration_minutes;
 
   return (
-    <motion.div
-      whileHover={{ scale: 1.02, boxShadow: "0 8px 24px rgba(0,0,0,0.1)" }}
+    <div
       className="rounded-xl p-4 flex items-center gap-4"
       style={{
         background: "var(--bg-elevated)",
@@ -55,6 +53,6 @@ export function TransportCard({ segment }: TransportCardProps) {
           {formatPrice(segment.price_usd)}
         </span>
       </div>
-    </motion.div>
+    </div>
   );
 }
