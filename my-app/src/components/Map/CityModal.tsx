@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { GeoPoint } from "@/types";
 import type { Activity } from "@/types";
@@ -36,6 +36,12 @@ interface CityModalProps {
 export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const INITIAL_HEIGHT_VH = 42;
+  const MIN_HEIGHT_VH = 28;
+  const MAX_HEIGHT_VH = 88;
+  const [panelHeightVh, setPanelHeightVh] = useState(INITIAL_HEIGHT_VH);
+  const dragStartYRef = useRef(0);
+  const dragStartHeightRef = useRef(INITIAL_HEIGHT_VH);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +66,36 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
     };
   }, [city.name]);
 
+  useEffect(() => {
+    setPanelHeightVh(INITIAL_HEIGHT_VH);
+  }, [city.name]);
+
+  const startResizeDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragStartYRef.current = e.clientY;
+    dragStartHeightRef.current = panelHeightVh;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    const onMove = (ev: PointerEvent) => {
+      const deltaPx = dragStartYRef.current - ev.clientY;
+      const deltaVh = (deltaPx / window.innerHeight) * 100;
+      const next = Math.max(
+        MIN_HEIGHT_VH,
+        Math.min(MAX_HEIGHT_VH, dragStartHeightRef.current + deltaVh)
+      );
+      setPanelHeightVh(next);
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -68,8 +104,17 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 200 }}
         className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white/25 backdrop-blur-2xl border border-white/30 border-b-0 shadow-[0_-4px_40px_rgba(0,0,0,0.08)] flex flex-col"
-        style={{ maxHeight: "42vh" }}
+        style={{ height: `${panelHeightVh}vh`, maxHeight: `${MAX_HEIGHT_VH}vh` }}
       >
+        <div
+          role="separator"
+          aria-label="Drag to resize"
+          onPointerDown={startResizeDrag}
+          className="pt-2 pb-1 flex items-center justify-center cursor-ns-resize touch-none"
+        >
+          <div className="h-1 w-10 rounded-full bg-black/20" />
+        </div>
+
         <div className="p-3 flex items-center justify-between border-b border-white/20 flex-shrink-0">
           <h2 className="text-lg font-display font-semibold" style={{ color: "var(--text-primary)" }}>
             {city.name}
@@ -84,7 +129,7 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
           </button>
         </div>
 
-        <div className="p-3 overflow-y-auto overflow-x-hidden flex-1 min-h-0" style={{ maxHeight: "calc(42vh - 110px)" }}>
+        <div className="p-3 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
           <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
             Top activities
           </p>
