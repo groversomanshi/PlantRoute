@@ -11,6 +11,7 @@ interface HotelSelectorProps {
   selectedHotel: Hotel | null;
   onSelect: (hotel: Hotel) => void;
   loading?: boolean;
+  emptyMessage?: string | null;
 }
 
 export function HotelSelector({
@@ -18,6 +19,7 @@ export function HotelSelector({
   selectedHotel,
   onSelect,
   loading = false,
+  emptyMessage = null,
 }: HotelSelectorProps) {
   if (loading) {
     return (
@@ -33,7 +35,7 @@ export function HotelSelector({
   if (hotels.length === 0) {
     return (
       <p className="text-sm py-8 text-center" style={{ color: "var(--text-muted)" }}>
-        No hotels found. Try a different city or dates.
+        {emptyMessage ?? "No hotels found. Try a different city or dates."}
       </p>
     );
   }

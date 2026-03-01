@@ -12,6 +12,8 @@ import {
   type RankedActivity,
 } from "@/lib/recommendations";
 import type { Activity } from "@/types";
+import { normalizedPlaceToActivity } from "@/lib/places-utils";
+import type { NormalizedPlace } from "@/types";
 
 export async function GET(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.amadeus, null);
@@ -49,8 +51,13 @@ export async function GET(req: NextRequest) {
         { status: 502 }
       );
     }
-    const data = (await res.json()) as { activities?: Activity[] };
-    activities = Array.isArray(data.activities) ? data.activities : [];
+    const data = (await res.json()) as { activities?: NormalizedPlace[] | Activity[] };
+    const raw = Array.isArray(data.activities) ? data.activities : [];
+    activities = raw.map((a) =>
+      "type" in a && a.type === "attraction"
+        ? normalizedPlaceToActivity(a as NormalizedPlace, city)
+        : (a as Activity)
+    );
   } catch (e) {
     console.error("[recommendations] Failed to fetch activities:", String(e));
     return NextResponse.json(
@@ -60,8 +67,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (activities.length === 0) {
-    console.warn("[recommendations] No activities from Amadeus for city:", city);
-    return NextResponse.json({ activities: [] });
+    return NextResponse.json({
+      activities: [],
+      message: "No real places found",
+    });
   }
 
   const engineUrl = process.env.PREFERENCE_ENGINE_XGBOOST_URL?.trim();

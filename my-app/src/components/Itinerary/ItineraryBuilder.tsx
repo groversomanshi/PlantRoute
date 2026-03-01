@@ -13,6 +13,8 @@ import type {
   ItineraryDay,
   TransportSegment,
 } from "@/types";
+import type { NormalizedPlace } from "@/types";
+import { normalizedPlaceToHotel } from "@/lib/places-utils";
 import { scoreItinerary } from "@/lib/interest-scorer";
 import { applyCarbonResult } from "@/lib/apply-carbon";
 import { HotelSelector } from "./HotelSelector";
@@ -58,6 +60,7 @@ export function ItineraryBuilder({
   const [loadingHotels, setLoadingHotels] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [hotelSuggestionReason, setHotelSuggestionReason] = useState<string | null>(null);
+  const [hotelsMessage, setHotelsMessage] = useState<string | null>(null);
   const [loadingFlights, setLoadingFlights] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [building, setBuilding] = useState(false);
@@ -77,10 +80,27 @@ export function ItineraryBuilder({
     party_size: 1,
   };
 
+  const parseHotelsResponse = (d: { hotels?: NormalizedPlace[] | Hotel[]; message?: string }) => {
+    const raw = d.hotels ?? [];
+    if (d.message === "No real places found" || raw.length === 0) {
+      setHotelsMessage(d.message ?? "No real places found");
+      setHotels([]);
+      return;
+    }
+    setHotelsMessage(null);
+    const asHotels = raw.map((h) =>
+      "type" in h && h.type === "hotel"
+        ? normalizedPlaceToHotel(h as NormalizedPlace, cityName)
+        : (h as Hotel)
+    );
+    setHotels(asHotels);
+  };
+
   useEffect(() => {
     if (step !== 3 || !startDate || !endDate) return;
     setLoadingHotels(true);
     setHotelSuggestionReason(null);
+    setHotelsMessage(null);
     const selectedAttractions = activities.filter((a) => selectedActivityIds.has(a.id));
     if (selectedAttractions.length > 0) {
       fetch("/api/recommendations/hotel-by-proximity", {
@@ -104,6 +124,7 @@ export function ItineraryBuilder({
           setHotels(d.hotels ?? []);
           if (d.suggestedHotel) setSelectedHotel(d.suggestedHotel);
           if (d.reason) setHotelSuggestionReason(d.reason);
+          setHotelsMessage(d.hotels?.length === 0 ? (d.message ?? "No real places found") : null);
         })
         .catch(() => {
           fetch(
@@ -111,7 +132,7 @@ export function ItineraryBuilder({
             { signal: AbortSignal.timeout(10000) }
           )
             .then((r) => r.json())
-            .then((d) => setHotels(d.hotels ?? []))
+            .then(parseHotelsResponse)
             .catch(() => setHotels([]));
         })
         .finally(() => setLoadingHotels(false));
@@ -121,7 +142,7 @@ export function ItineraryBuilder({
         { signal: AbortSignal.timeout(10000) }
       )
         .then((r) => r.json())
-        .then((d) => setHotels(d.hotels ?? []))
+        .then(parseHotelsResponse)
         .catch(() => setHotels([]))
         .finally(() => setLoadingHotels(false));
     }
@@ -529,6 +550,7 @@ export function ItineraryBuilder({
                   selectedHotel={selectedHotel}
                   onSelect={setSelectedHotel}
                   loading={loadingHotels}
+                  emptyMessage={hotelsMessage}
                 />
                 <button
                   type="button"

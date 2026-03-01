@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { GeoPoint } from "@/types";
 import type { Activity } from "@/types";
+import type { NormalizedPlace } from "@/types";
+import { normalizedPlaceToActivity } from "@/lib/places-utils";
 import { LoadingRoute } from "@/components/UI/LoadingRoute";
 import { formatPrice } from "@/lib/utils";
 import {
@@ -36,10 +38,12 @@ interface CityModalProps {
 export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [noPlacesMessage, setNoPlacesMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setNoPlacesMessage(null);
     const cityName = city.name.split(",")[0]?.trim() ?? city.name;
     fetch(
       `/api/amadeus/activities?city=${encodeURIComponent(cityName)}&limit=5`,
@@ -47,7 +51,19 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
     )
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setActivities(data.activities ?? []);
+        if (cancelled) return;
+        const raw = data.activities ?? [];
+        if (data.message === "No real places found" || raw.length === 0) {
+          setActivities([]);
+          setNoPlacesMessage(data.message ?? "No real places found");
+          return;
+        }
+        const asActivities = raw.map((a: NormalizedPlace | Activity) =>
+          "type" in a && a.type === "attraction"
+            ? normalizedPlaceToActivity(a as NormalizedPlace, cityName)
+            : (a as Activity)
+        );
+        setActivities(asActivities);
       })
       .catch(() => {
         if (!cancelled) setActivities([]);
@@ -128,7 +144,7 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
               })}
               {activities.length === 0 && !loading && (
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  No activities found. You can still build an itinerary.
+                  {noPlacesMessage ?? "No activities found. You can still build an itinerary."}
                 </p>
               )}
             </div>

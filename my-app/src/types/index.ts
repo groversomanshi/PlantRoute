@@ -24,6 +24,18 @@ export interface GeoPoint {
   name: string;
 }
 
+/** Normalized place from Google Places for map + list UI. */
+export interface NormalizedPlace {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  rating?: number;
+  price_level?: number;
+  vicinity?: string;
+  type: "hotel" | "attraction";
+}
+
 export interface TransportSegment {
   id: string;
   mode: TransportMode;

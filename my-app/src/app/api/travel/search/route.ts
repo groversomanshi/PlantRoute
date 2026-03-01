@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchTravelWithGemini } from "@/lib/gemini";
-import { addDistanceAndEmission } from "@/lib/flight-utils";
 import { validateBody } from "@/lib/validate";
 import { TravelSearchSchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
-import { HOTEL_FACTOR_PER_NIGHT } from "@/lib/carbon";
-import type { Hotel } from "@/types";
-
-function estimateHotelEmission(stars: number): number {
-  const base = HOTEL_FACTOR_PER_NIGHT;
-  const reduction = Math.max(0, (5 - stars) * 2);
-  return Math.max(8, base - reduction);
-}
+import { geocodeWithGoogle } from "@/lib/google-maps";
+import { fetchPlacesByCity } from "@/lib/google-maps";
+import {
+  fetchFlightData,
+  scoreRecommendedItinerary,
+} from "@/lib/travel-planner";
 
 /**
  * POST /api/travel/search
  * Body: { city, startDate, endDate, interests?, budgetLevel?, originIata, destinationIata }
- * Returns real travel data from Gemini with Google Search grounding.
- * Use when GEMINI_API_KEY is set. On failure (503), client should fall back to Amadeus/mock.
+ * Uses Google Places as primary for hotels + attractions; fetches flight data; scores itinerary.
+ * Returns: { flights, hotels, attractions, recommendedItinerary }.
  */
 export async function POST(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.travelSearch, null);
@@ -33,40 +29,48 @@ export async function POST(req: NextRequest) {
   const validated = validateBody(TravelSearchSchema, body);
   if (validated.error) return validated.error;
 
-  const { city, startDate, endDate, interests, budgetLevel, originIata, destinationIata } = validated.data;
+  const { city, startDate, endDate, originIata, destinationIata } = validated.data;
 
-  const result = await searchTravelWithGemini({
-    city,
-    startDate,
-    endDate,
-    interests,
-    budgetLevel,
-    originIata,
-    destinationIata,
-  });
-
-  if (!result) {
+  const point = await geocodeWithGoogle(city);
+  if (!point) {
     return NextResponse.json(
-      { error: "Gemini travel search failed or returned invalid data. Use fallback." },
-      { status: 503 }
+      {
+        flights: { arrivalFlights: [], departureFlights: [] },
+        hotels: [],
+        attractions: [],
+        recommendedItinerary: null,
+        message: "Could not geocode city",
+      },
+      { status: 200 }
     );
   }
 
-  const hotelsWithEmission: Hotel[] = result.hotels
-    .map((h) => ({
-      ...h,
-      emission_kg_per_night: estimateHotelEmission(h.stars),
-    }))
-    .sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0));
+  const [places, flightData] = await Promise.all([
+    fetchPlacesByCity(city),
+    fetchFlightData(originIata, destinationIata, startDate, endDate),
+  ]);
 
-  const arrivalFlights = result.arrivalFlights.map(addDistanceAndEmission);
-  const departureFlights = result.departureFlights.map(addDistanceAndEmission);
+  const recommendedItinerary = scoreRecommendedItinerary(
+    places.hotels,
+    places.attractions,
+    flightData.arrivalFlights,
+    flightData.departureFlights
+  );
 
   return NextResponse.json({
-    hotels: hotelsWithEmission,
-    activities: result.activities,
-    arrivalFlights,
-    departureFlights,
-    source: "gemini",
+    flights: {
+      arrivalFlights: flightData.arrivalFlights.map((f) => f.segment),
+      departureFlights: flightData.departureFlights.map((f) => f.segment),
+    },
+    hotels: places.hotels,
+    attractions: places.attractions,
+    recommendedItinerary: recommendedItinerary
+      ? {
+          hotel: recommendedItinerary.hotel,
+          attractionIds: recommendedItinerary.attractionIds,
+          reason: recommendedItinerary.reason,
+        }
+      : null,
+    source: "google_places",
   });
 }

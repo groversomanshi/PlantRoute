@@ -3,7 +3,9 @@ import { validateBody } from "@/lib/validate";
 import { HotelByProximitySchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { suggestHotelByProximity } from "@/lib/gemini";
+import { normalizedPlaceToHotel } from "@/lib/places-utils";
 import type { Hotel } from "@/types";
+import type { NormalizedPlace } from "@/types";
 
 export async function POST(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.amadeus, null);
@@ -34,8 +36,13 @@ export async function POST(req: NextRequest) {
         { status: 502 }
       );
     }
-    const data = (await res.json()) as { hotels?: Hotel[] };
-    hotels = Array.isArray(data.hotels) ? data.hotels : [];
+    const data = (await res.json()) as { hotels?: NormalizedPlace[] | Hotel[] };
+    const raw = Array.isArray(data.hotels) ? data.hotels : [];
+    hotels = raw.map((h) =>
+      "type" in h && h.type === "hotel"
+        ? normalizedPlaceToHotel(h as NormalizedPlace, city)
+        : (h as Hotel)
+    );
   } catch (e) {
     console.error(String(e));
     return NextResponse.json(
