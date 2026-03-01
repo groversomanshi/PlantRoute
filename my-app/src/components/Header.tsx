@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 
-type BasemapKey = "light" | "outdoors";
+import type { BasemapKey } from "@/types";
+import { BASEMAP_OPTIONS } from "@/types";
 
 interface HeaderProps {
   useMapbox?: boolean;
@@ -45,18 +46,18 @@ export function Header({ useMapbox = false, basemap = "outdoors", onBasemapChang
           className="flex rounded-lg overflow-hidden border-2"
           style={{ borderColor: "var(--border)", background: "var(--bg-surface)" }}
         >
-          {(["light", "outdoors"] as const).map((key) => (
+          {BASEMAP_OPTIONS.map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => onBasemapChange(key)}
-              className="px-3 py-1.5 text-sm font-medium capitalize"
+              className="px-3 py-1.5 text-sm font-medium"
               style={{
                 color: basemap === key ? "var(--accent-green)" : "var(--text-muted)",
                 background: basemap === key ? "var(--accent-green-light)" : "transparent",
               }}
             >
-              {key}
+              {label}
             </button>
           ))}
         </div>

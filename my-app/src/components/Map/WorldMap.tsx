@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { GeoPoint } from "@/types";
+import type { GeoPoint, BasemapKey } from "@/types";
 import { CITIES } from "@/lib/cities";
 
 const MapboxMap = dynamic(() => import("./WorldMapMapbox"), { ssr: false });
@@ -11,7 +11,7 @@ const CITIES_LIST = Object.values(CITIES);
 
 interface WorldMapProps {
   useMapbox: boolean;
-  basemap?: "light" | "outdoors";
+  basemap?: BasemapKey;
   onCitySelect: (city: GeoPoint) => void;
   pastTripCities?: string[];
   hoveredCity?: GeoPoint | null;

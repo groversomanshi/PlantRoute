@@ -22,6 +22,7 @@ export const CITIES: Record<string, GeoPoint> = {
   "Dublin": { lat: 53.3498, lng: -6.2603, name: "Dublin" },
   "Los Angeles": { lat: 34.0522, lng: -118.2437, name: "Los Angeles" },
   "Chicago": { lat: 41.8781, lng: -87.6298, name: "Chicago" },
+  "Detroit": { lat: 42.3314, lng: -83.0458, name: "Detroit" },
   "San Francisco": { lat: 37.7749, lng: -122.4194, name: "San Francisco" },
   "Miami": { lat: 25.7617, lng: -80.1918, name: "Miami" },
   "Toronto": { lat: 43.6532, lng: -79.3832, name: "Toronto" },
@@ -64,6 +65,8 @@ export const CITIES: Record<string, GeoPoint> = {
   "Philadelphia": { lat: 39.9526, lng: -75.1652, name: "Philadelphia" },
 };
 
+const CITIES_LIST = Object.values(CITIES);
+
 export function getCityPoint(cityName: string): GeoPoint | null {
   const normalized = cityName.trim();
   for (const [name, point] of Object.entries(CITIES)) {
@@ -73,6 +76,61 @@ export function getCityPoint(cityName: string): GeoPoint | null {
 }
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_HEADERS: HeadersInit = {
+  Accept: "application/json",
+  "User-Agent": "PlantRoute-Travel-App (https://github.com/plantroute)",
+};
+
+/**
+ * Returns up to `limit` place suggestions for autocomplete. Uses Nominatim.
+ * Use for search-as-you-type; prefer getCityPoint for exact matches from CITIES.
+ */
+export async function autocompletePlaces(query: string, limit = 5): Promise<GeoPoint[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const cached = CITIES_LIST.filter(
+    (c) => c.name.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, limit);
+  if (cached.length > 0 && q.length >= 2) {
+    const exact = cached.find((c) => c.name.toLowerCase() === q.toLowerCase());
+    if (exact) return [exact, ...cached.filter((c) => c !== exact)].slice(0, limit);
+    if (cached.length >= limit) return cached;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(
+      `${NOMINATIM_URL}?q=${encodeURIComponent(q)}&format=json&limit=${limit}&addressdetails=1`,
+      { signal: controller.signal, headers: NOMINATIM_HEADERS }
+    );
+    const data = (await res.json()) as Array<{
+      lat: string;
+      lon: string;
+      display_name: string;
+      address?: { city?: string; town?: string; village?: string; municipality?: string; state?: string; country?: string };
+    }>;
+    clearTimeout(timeout);
+    if (!Array.isArray(data) || data.length === 0) return cached;
+    const seen = new Set<string>();
+    const out: GeoPoint[] = [];
+    for (const item of data) {
+      const name = item.address?.city ?? item.address?.town ?? item.address?.village ?? item.address?.municipality ?? item.display_name.split(",")[0]?.trim() ?? item.display_name;
+      const key = `${name}|${item.lat}|${item.lon}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+        name: name.trim() || item.display_name,
+      });
+      if (out.length >= limit) break;
+    }
+    return out.length > 0 ? out : cached;
+  } catch {
+    clearTimeout(timeout);
+    return cached;
+  }
+}
 
 export async function geocodeCity(cityName: string): Promise<GeoPoint | null> {
   const cached = getCityPoint(cityName);
@@ -82,7 +140,7 @@ export async function geocodeCity(cityName: string): Promise<GeoPoint | null> {
   try {
     const res = await fetch(
       `${NOMINATIM_URL}?q=${encodeURIComponent(cityName)}&format=json&limit=1`,
-      { signal: controller.signal, headers: { Accept: "application/json" } }
+      { signal: controller.signal, headers: NOMINATIM_HEADERS }
     );
     const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
     clearTimeout(timeout);

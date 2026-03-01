@@ -1,3 +1,14 @@
+/** Map basemap style keys. Used by map and search bar theming. */
+export type BasemapKey = "light" | "outdoors" | "streets" | "dark" | "satellite";
+
+export const BASEMAP_OPTIONS: { key: BasemapKey; label: string }[] = [
+  { key: "light", label: "Light" },
+  { key: "outdoors", label: "Outdoors" },
+  { key: "streets", label: "Streets" },
+  { key: "dark", label: "Dark" },
+  { key: "satellite", label: "Satellite" },
+];
+
 export type TransportMode =
   | "flight_short"
   | "flight_long"

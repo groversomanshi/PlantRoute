@@ -8,13 +8,11 @@ import { CitySearchBar } from "@/components/Map/CitySearchBar";
 import { ItineraryBuilder } from "@/components/Itinerary/ItineraryBuilder";
 import { Sidebar } from "@/components/Sidebar";
 import { MessageCircle } from "lucide-react";
-import type { GeoPoint } from "@/types";
+import type { GeoPoint, BasemapKey } from "@/types";
 
 interface HomeClientProps {
   useMapbox: boolean;
 }
-
-type BasemapKey = "light" | "outdoors";
 
 export function HomeClient({ useMapbox }: HomeClientProps) {
   const [selectedCity, setSelectedCity] = useState<GeoPoint | null>(null);
@@ -107,6 +105,7 @@ export function HomeClient({ useMapbox }: HomeClientProps) {
               </div>
               <div className="w-full max-w-2xl pointer-events-auto">
                 <CitySearchBar
+                  basemap={basemap}
                   onCitySelect={setSelectedCity}
                   onFlyTo={handleSearchFlyTo}
                 />
