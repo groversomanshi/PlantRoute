@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { autocompletePlaces } from "@/lib/cities";
 
-const MAX_SUGGESTIONS = 5;
+const MAX_SUGGESTIONS = 8;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

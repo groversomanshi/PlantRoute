@@ -85,17 +85,14 @@ const NOMINATIM_HEADERS: HeadersInit = {
  * Returns up to `limit` place suggestions for autocomplete. Uses Nominatim.
  * Use for search-as-you-type; prefer getCityPoint for exact matches from CITIES.
  */
-export async function autocompletePlaces(query: string, limit = 5): Promise<GeoPoint[]> {
+export async function autocompletePlaces(query: string, limit = 8): Promise<GeoPoint[]> {
   const q = query.trim();
-  if (!q) return [];
+  if (!q || q.length < 2) return [];
   const cached = CITIES_LIST.filter(
     (c) => c.name.toLowerCase().includes(q.toLowerCase())
   ).slice(0, limit);
-  if (cached.length > 0 && q.length >= 2) {
-    const exact = cached.find((c) => c.name.toLowerCase() === q.toLowerCase());
-    if (exact) return [exact, ...cached.filter((c) => c !== exact)].slice(0, limit);
-    if (cached.length >= limit) return cached;
-  }
+  const exactCached = cached.find((c) => c.name.toLowerCase() === q.toLowerCase());
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
@@ -110,21 +107,34 @@ export async function autocompletePlaces(query: string, limit = 5): Promise<GeoP
       address?: { city?: string; town?: string; village?: string; municipality?: string; state?: string; country?: string };
     }>;
     clearTimeout(timeout);
-    if (!Array.isArray(data) || data.length === 0) return cached;
     const seen = new Set<string>();
     const out: GeoPoint[] = [];
-    for (const item of data) {
-      const name = item.address?.city ?? item.address?.town ?? item.address?.village ?? item.address?.municipality ?? item.display_name.split(",")[0]?.trim() ?? item.display_name;
-      const key = `${name}|${item.lat}|${item.lon}`;
-      if (seen.has(key)) continue;
+
+    if (exactCached) {
+      const key = `${exactCached.name}|${exactCached.lat}|${exactCached.lng}`;
       seen.add(key);
-      out.push({
-        lat: parseFloat(item.lat),
-        lng: parseFloat(item.lon),
-        name: name.trim() || item.display_name,
-      });
-      if (out.length >= limit) break;
+      out.push(exactCached);
     }
+
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        const cityPart = item.address?.city ?? item.address?.town ?? item.address?.village ?? item.address?.municipality ?? null;
+        const countryPart = item.address?.country ?? null;
+        const name = cityPart
+          ? (countryPart ? `${cityPart.trim()}, ${countryPart.trim()}` : cityPart.trim())
+          : (item.display_name.split(",")[0]?.trim() || item.display_name);
+        const key = `${item.lat}|${item.lon}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lon),
+          name: name,
+        });
+        if (out.length >= limit) break;
+      }
+    }
+
     return out.length > 0 ? out : cached;
   } catch {
     clearTimeout(timeout);

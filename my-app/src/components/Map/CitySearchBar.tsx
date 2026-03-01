@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Search } from "lucide-react";
 import type { GeoPoint, BasemapKey } from "@/types";
-import { CITIES } from "@/lib/cities";
 
-const CITIES_LIST = Object.values(CITIES);
+const DEBOUNCE_MS = 280;
 
 const SEARCH_BAR_THEMES: Record<
   BasemapKey,
@@ -96,27 +95,49 @@ export function CitySearchBar({
   onFlyTo,
 }: CitySearchBarProps) {
   const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<GeoPoint[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const theme = SEARCH_BAR_THEMES[basemap];
 
-  const suggestions = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (q.length < 2) return [];
-    return CITIES_LIST.filter((city) =>
-      city.name.toLowerCase().includes(q)
-    ).slice(0, 5);
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return;
+    }
+    const tid = setTimeout(() => {
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
+      setSuggestionsLoading(true);
+      fetch(`/api/geocode/autocomplete?q=${encodeURIComponent(q)}`, {
+        signal: abortRef.current.signal,
+      })
+        .then((r) => r.json())
+        .then((data: GeoPoint[]) => setSuggestions(Array.isArray(data) ? data : []))
+        .catch((e) => {
+          if ((e as Error).name !== "AbortError") setSuggestions([]);
+        })
+        .finally(() => setSuggestionsLoading(false));
+    }, DEBOUNCE_MS);
+    return () => {
+      clearTimeout(tid);
+      abortRef.current?.abort();
+    };
   }, [query]);
 
   useEffect(() => {
-    setDropdownOpen(query.trim().length >= 2 && suggestions.length > 0);
+    setDropdownOpen(query.trim().length >= 2 && (suggestions.length > 0 || suggestionsLoading));
     setHighlightedIndex(0);
-  }, [query, suggestions.length]);
+  }, [query, suggestions.length, suggestionsLoading]);
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -145,7 +166,7 @@ export function CitySearchBar({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (!dropdownOpen || suggestions.length === 0) return;
+      if (!dropdownOpen || suggestions.length === 0 || suggestionsLoading) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setHighlightedIndex((i) => (i + 1) % suggestions.length);
@@ -159,7 +180,7 @@ export function CitySearchBar({
         setDropdownOpen(false);
       }
     },
-    [dropdownOpen, suggestions, highlightedIndex, handleSelectSuggestion]
+    [dropdownOpen, suggestions, suggestionsLoading, highlightedIndex, handleSelectSuggestion]
   );
 
   const handleSearch = useCallback(
@@ -206,7 +227,7 @@ export function CitySearchBar({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => query.trim().length >= 2 && suggestions.length > 0 && setDropdownOpen(true)}
+          onFocus={() => query.trim().length >= 2 && (suggestions.length > 0 || suggestionsLoading) && setDropdownOpen(true)}
           placeholder="Search destinations..."
           className={`flex-1 bg-transparent font-medium py-2 px-1 focus:outline-none ${theme.input} ${theme.placeholder}`}
           autoComplete="off"
@@ -225,27 +246,33 @@ export function CitySearchBar({
         </button>
       </form>
 
-      {dropdownOpen && suggestions.length > 0 && (
+      {dropdownOpen && (
         <ul
           id="city-suggestions"
           role="listbox"
           className={`absolute top-full left-0 right-0 mt-1 rounded-xl border overflow-hidden z-50 max-h-60 overflow-y-auto ${theme.dropdown}`}
         >
-          {suggestions.map((city, i) => (
-            <li
-              key={city.name}
-              id={`suggestion-${i}`}
-              role="option"
-              aria-selected={i === highlightedIndex}
-              onClick={() => handleSelectSuggestion(city)}
-              onMouseEnter={() => setHighlightedIndex(i)}
-              className={`px-4 py-3 cursor-pointer text-sm font-medium transition-colors ${theme.dropdownItem} ${theme.dropdownItemHover} ${
-                i === highlightedIndex ? "bg-[#2d6a4f]/15" : ""
-              }`}
-            >
-              {city.name}
+          {suggestionsLoading && suggestions.length === 0 ? (
+            <li className={`px-4 py-3 text-sm ${theme.dropdownItem}`}>
+              Searching...
             </li>
-          ))}
+          ) : (
+            suggestions.map((city, i) => (
+              <li
+                key={`${city.name}-${city.lat}-${city.lng}`}
+                id={`suggestion-${i}`}
+                role="option"
+                aria-selected={i === highlightedIndex}
+                onClick={() => handleSelectSuggestion(city)}
+                onMouseEnter={() => setHighlightedIndex(i)}
+                className={`px-4 py-3 cursor-pointer text-sm font-medium transition-colors ${theme.dropdownItem} ${theme.dropdownItemHover} ${
+                  i === highlightedIndex ? "bg-[#2d6a4f]/15" : ""
+                }`}
+              >
+                {city.name}
+              </li>
+            ))
+          )}
         </ul>
       )}
 
