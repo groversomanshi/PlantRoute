@@ -2,6 +2,7 @@
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import type { Itinerary, ItineraryDay, Activity, Hotel } from "@/types";
 import { ActivityCard } from "@/components/Itinerary/ActivityCard";
@@ -21,6 +22,7 @@ export default function ItineraryDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const id = typeof params.id === "string" ? params.id : "";
   const isEditMode = searchParams.get("edit") === "1";
 
@@ -90,11 +92,36 @@ export default function ItineraryDetailPage() {
   const loadItinerary = useCallback(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    const list: Itinerary[] = raw ? JSON.parse(raw) : [];
+    const list: (Itinerary & { confirmed?: boolean })[] = raw ? JSON.parse(raw) : [];
     const found = list.find((i) => i.id === id);
     setItinerary(found ? JSON.parse(JSON.stringify(found)) : null);
     setShowSaveBanner(list.length >= 1);
   }, [id]);
+
+  const handleConfirmTrip = useCallback(() => {
+    if (!itinerary) return;
+    if (!session?.user) {
+      signIn(undefined, { callbackUrl: `/itinerary/${itinerary.id}` });
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const list: (Itinerary & { confirmed?: boolean })[] = raw ? JSON.parse(raw) : [];
+    const idx = list.findIndex((i) => i.id === itinerary.id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], confirmed: true };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      setItinerary((prev) => (prev ? { ...prev, confirmed: true } : null));
+    }
+    fetch("/api/carbon/record", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        emissionKg: itinerary.total_emission_kg ?? 0,
+        itineraryId: itinerary.id,
+      }),
+    }).catch(() => {});
+  }, [itinerary, session?.user]);
 
   useEffect(() => {
     loadItinerary();
@@ -252,6 +279,16 @@ export default function ItineraryDetailPage() {
       }
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
       setItinerary(updated);
+      if (session?.user) {
+        fetch("/api/carbon/record", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            emissionKg: updated.total_emission_kg ?? 0,
+            itineraryId: updated.id,
+          }),
+        }).catch(() => {});
+      }
       router.replace(`/itinerary/${id}`);
     } catch (e) {
       console.error(e);
@@ -508,17 +545,29 @@ export default function ItineraryDetailPage() {
               ))}
             </div>
             {!isEditMode && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOriginalItinerary((prev) => prev ?? JSON.parse(JSON.stringify(itinerary)));
-                  setRegretOpen(true);
-                }}
-                className="w-full py-3 rounded-xl font-medium border"
-                style={{ borderColor: "var(--accent-green)", color: "var(--accent-green)" }}
-              >
-                Find a lower-carbon version
-              </button>
+              <div className="space-y-2">
+                {(itinerary as { confirmed?: boolean }).confirmed !== true && (
+                  <button
+                    type="button"
+                    onClick={handleConfirmTrip}
+                    className="w-full py-3 rounded-xl font-medium text-white"
+                    style={{ background: "#2d6a4f" }}
+                  >
+                    {session?.user ? "Confirm trip" : "Sign in to confirm trip"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOriginalItinerary((prev) => prev ?? JSON.parse(JSON.stringify(itinerary)));
+                    setRegretOpen(true);
+                  }}
+                  className="w-full py-3 rounded-xl font-medium border"
+                  style={{ borderColor: "var(--accent-green)", color: "var(--accent-green)" }}
+                >
+                  Find a lower-carbon version
+                </button>
+              </div>
             )}
           </div>
         </aside>

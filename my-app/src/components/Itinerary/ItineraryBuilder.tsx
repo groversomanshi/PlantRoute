@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useSession, signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowLeft } from "lucide-react";
 import type { GeoPoint } from "@/types";
@@ -64,6 +65,7 @@ export function ItineraryBuilder({
   const [regretItinerary, setRegretItinerary] = useState<Itinerary | null>(null);
   const [originalItineraryForRegret, setOriginalItineraryForRegret] = useState<Itinerary | null>(null);
 
+  const { data: session } = useSession();
   const cityName = city.name.split(",")[0]?.trim() ?? city.name;
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -316,6 +318,10 @@ export function ItineraryBuilder({
   };
 
   const handleConfirmTrip = (it: Itinerary) => {
+    if (!session?.user) {
+      signIn(undefined, { callbackUrl: `/itinerary/${it.id}` });
+      return;
+    }
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(STORAGE_KEY);
     const list: (Itinerary & { confirmed?: boolean })[] = stored ? JSON.parse(stored) : [];
@@ -323,6 +329,16 @@ export function ItineraryBuilder({
     if (idx >= 0) {
       list[idx] = { ...list[idx], confirmed: true };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    }
+    if (session.user) {
+      fetch("/api/carbon/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emissionKg: it.total_emission_kg ?? 0,
+          itineraryId: it.id,
+        }),
+      }).catch(() => {});
     }
     window.location.href = `/itinerary/${it.id}`;
   };
@@ -760,7 +776,7 @@ export function ItineraryBuilder({
                       className="w-full py-3 px-4 rounded-xl font-medium text-white"
                       style={{ background: "#2d6a4f" }}
                     >
-                      Confirm trip
+                      {session?.user ? "Confirm trip" : "Sign in to confirm trip"}
                     </button>
                     <button
                       type="button"

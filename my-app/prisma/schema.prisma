@@ -20,6 +20,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   preference    Preference?
+  tripCarbons   TripCarbon[]
 }
 
 // User preferences from onboarding/profile form — for LLM training and personalization
@@ -83,4 +84,14 @@ model VerificationToken {
   expires    DateTime
 
   @@id([identifier, token])
+}
+
+// Carbon emissions per trip, for leaderboard ranking (lower avg = better rank)
+model TripCarbon {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emissionKg  Float
+  itineraryId String?
+  createdAt   DateTime @default(now())
 }

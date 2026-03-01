@@ -1,17 +1,19 @@
 "use client";
 
 import { signIn, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 
 export default function SignInPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
 
   useEffect(() => {
-    if (session) router.replace("/");
-  }, [session, router]);
+    if (session) router.replace(callbackUrl);
+  }, [session, router, callbackUrl]);
 
   return (
     <div
@@ -47,7 +49,7 @@ export default function SignInPage() {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={() => signIn("google", { callbackUrl: "/onboarding" })}
+          onClick={() => signIn("google", { callbackUrl: callbackUrl === "/" ? "/onboarding" : callbackUrl })}
           className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-white font-medium"
           style={{ background: "#2d6a4f" }}
         >

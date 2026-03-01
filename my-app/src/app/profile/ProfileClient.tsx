@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { TreePine, Trash2, Pencil } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { TreePine, Trash2, Pencil, LogOut } from "lucide-react";
 import { useProfile } from "@/hooks/useProfile";
 import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
 import { ATTRACTION_TYPES, DEFAULT_TRAVEL_PREFERENCES, type UserPreferences } from "@/types";
@@ -128,6 +128,15 @@ export default function ProfileClient({ user: userProp }: ProfileClientProps) {
         <h1 className="text-2xl font-display font-semibold text-center" style={{ color: "var(--text-primary)" }}>
           {user?.name ?? "Profile"}
         </h1>
+        <button
+          type="button"
+          onClick={() => signOut({ callbackUrl: "/" })}
+          className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-colors hover:bg-red-50"
+          style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+        >
+          <LogOut className="w-4 h-4" />
+          Log out
+        </button>
       </header>
 
       <div

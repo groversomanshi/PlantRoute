@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Home, Map, User, LogOut, ChevronDown } from "lucide-react";
+import { Home, Map, User, LogOut, ChevronDown, Trophy } from "lucide-react";
 import type { BasemapKey } from "@/types";
 import { BASEMAP_OPTIONS } from "@/types";
 
@@ -15,6 +15,7 @@ interface SidebarProps {
 
 const navItems = [
   { href: "/", icon: Home, label: "Home" },
+  { href: "/leaderboard", icon: Trophy, label: "Leaderboard" },
   { href: "/profile", icon: User, label: "Profile" },
 ];
 
