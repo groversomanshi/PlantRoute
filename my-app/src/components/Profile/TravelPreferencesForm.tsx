@@ -376,7 +376,9 @@ export function TravelPreferencesForm({
   const handleSliderActivated = useCallback(() => {
     setActivatedCount((prev) => {
       const next = prev + 1;
-      if (next === SLIDER_IDS.length) onAllSlidersActivated?.();
+      if (next === SLIDER_IDS.length && onAllSlidersActivated) {
+        queueMicrotask(onAllSlidersActivated);
+      }
       return next;
     });
   }, [onAllSlidersActivated]);

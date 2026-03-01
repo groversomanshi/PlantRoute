@@ -43,10 +43,14 @@ export async function getPreferenceByUserId(userId: string): Promise<{
     completed: row.completed,
   };
 
+  const interests =
+    row.likedAttractionTypes?.length
+      ? row.likedAttractionTypes
+      : (Array.isArray(snapshot?.interests) ? snapshot.interests : []);
   const preferences: UserPreferences = snapshot
     ? {
         ...snapshot,
-        interests: snapshot.interests ?? [],
+        interests,
         budget_level: snapshot.budget_level ?? "mid",
         carbon_sensitivity: snapshot.carbon_sensitivity ?? "medium",
         avoid_flying: snapshot.avoid_flying ?? false,
@@ -54,7 +58,7 @@ export async function getPreferenceByUserId(userId: string): Promise<{
         travel,
       }
     : {
-        interests: [],
+        interests,
         budget_level: "mid",
         carbon_sensitivity: "medium",
         avoid_flying: false,
@@ -85,6 +89,7 @@ export async function upsertPreference(
   const additionalNotes = travel?.additional_notes ?? null;
   const completed = travel?.completed ?? false;
 
+  const likedAttractionTypes = preferences.interests ?? [];
   const snapshot: UserPreferences = {
     ...preferences,
     travel: travel
@@ -96,6 +101,7 @@ export async function upsertPreference(
     where: { userId },
     create: {
       userId,
+      likedAttractionTypes,
       tripPace,
       crowdComfort,
       morningTolerance,
@@ -113,6 +119,7 @@ export async function upsertPreference(
       preferencesSnapshot: snapshot as object,
     },
     update: {
+      likedAttractionTypes,
       tripPace,
       crowdComfort,
       morningTolerance,

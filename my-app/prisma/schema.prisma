@@ -44,6 +44,8 @@ model Preference {
   travelVibe              String   @default("Chill")
   additionalNotes         String?
   completed               Boolean  @default(false)
+  // Attraction types the user likes (multi-select; used for recommendations)
+  likedAttractionTypes    String[] @default([])
   // Full snapshot for LLM training (JSON: interests, raw_text, etc.)
   preferencesSnapshot     Json?
   updatedAt               DateTime @updatedAt

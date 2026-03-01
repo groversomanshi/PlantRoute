@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useProfile } from "@/hooks/useProfile";
 import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
-import { DEFAULT_TRAVEL_PREFERENCES, type UserPreferences } from "@/types";
+import { ATTRACTION_TYPES, DEFAULT_TRAVEL_PREFERENCES, type UserPreferences } from "@/types";
 
 const STORAGE_KEY = "plantroute_itineraries";
 
@@ -91,18 +91,50 @@ export default function ProfileClient() {
 
       <section className="mb-8">
         <h2 className="text-lg font-medium mb-3" style={{ color: "var(--text-primary)" }}>
-          Preference tags
+          Attraction types you like
         </h2>
+        <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>
+          Select the kinds of attractions you enjoy (we’ll use this to recommend activities).
+        </p>
         <div className="flex flex-wrap gap-2 mb-4">
-          {effectivePreferences?.interests.map((i) => (
-            <span
-              key={i}
-              className="rounded-full px-3 py-1 text-sm"
-              style={{ background: "var(--accent-green-light)", color: "var(--accent-green)" }}
-            >
-              {i}
-            </span>
-          ))}
+          {ATTRACTION_TYPES.map((type) => {
+            const selected = effectivePreferences?.interests?.includes(type) ?? false;
+            return (
+              <button
+                key={type}
+                type="button"
+                className="rounded-full px-3 py-1.5 text-sm border transition-colors capitalize"
+                style={{
+                  borderColor: selected ? "var(--accent-green)" : "var(--border)",
+                  background: selected ? "var(--accent-green-light)" : "transparent",
+                  color: selected ? "var(--accent-green)" : "var(--text-primary)",
+                }}
+                onClick={() => {
+                  setHasEditedPreferences(true);
+                  const current = effectivePreferences?.interests ?? [];
+                  const next = selected
+                    ? current.filter((i) => i !== type)
+                    : [...current, type];
+                  setPreferences((prev) =>
+                    prev
+                      ? { ...prev, interests: next }
+                      : {
+                          ...(profile?.preferences ?? {
+                            interests: [],
+                            budget_level: "mid",
+                            carbon_sensitivity: "medium",
+                            avoid_flying: false,
+                            party_size: 1,
+                          }),
+                          interests: next,
+                        }
+                  );
+                }}
+              >
+                {type}
+              </button>
+            );
+          })}
         </div>
         <button
           type="button"

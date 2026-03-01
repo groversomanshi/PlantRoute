@@ -114,6 +114,20 @@ export const TRAVEL_VIBES: TravelVibe[] = [
   "Nightlife",
 ];
 
+/** Attraction types for multi-select "what kinds of attractions you like". Aligns with activity categories / interest-scorer. */
+export const ATTRACTION_TYPES = [
+  "museum",
+  "culture",
+  "outdoor",
+  "nature",
+  "food",
+  "nightlife",
+  "wellness",
+  "beach",
+  "ski",
+] as const;
+export type AttractionType = (typeof ATTRACTION_TYPES)[number];
+
 export const DEFAULT_TRAVEL_PREFERENCES: TravelPreferences = {
   trip_pace: 0.5,
   crowd_comfort: 0.5,

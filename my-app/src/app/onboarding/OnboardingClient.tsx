@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useProfile } from "@/hooks/useProfile";
 import { TravelPreferencesForm } from "@/components/Profile/TravelPreferencesForm";
 import {
+  ATTRACTION_TYPES,
   DEFAULT_TRAVEL_PREFERENCES,
   type TravelPreferences,
   type UserPreferences,
@@ -35,6 +36,7 @@ export function OnboardingClient() {
   const { data: session, status: sessionStatus } = useSession();
   const { profile, loading, load, savePreferences } = useProfile();
   const [travel, setTravel] = useState<TravelPreferences>(DEFAULT_TRAVEL_PREFERENCES);
+  const [interests, setInterests] = useState<string[]>([]);
   const [hasEditedTravel, setHasEditedTravel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [allSlidersActivated, setAllSlidersActivated] = useState(false);
@@ -69,6 +71,12 @@ export function OnboardingClient() {
     }
   }, [sessionStatus, hasCheckedProfile, loading, profile, router, forceShow]);
 
+  useEffect(() => {
+    if (hasCheckedProfile && profile?.preferences?.interests?.length && interests.length === 0) {
+      setInterests(profile.preferences.interests);
+    }
+  }, [hasCheckedProfile, profile?.preferences?.interests, interests.length]);
+
   const effectiveTravel =
     !hasEditedTravel && profile?.preferences?.travel
       ? { ...DEFAULT_TRAVEL_PREFERENCES, ...profile.preferences.travel }
@@ -78,6 +86,7 @@ export function OnboardingClient() {
     e.preventDefault();
     setSaving(true);
     const prefs = mergeTravel(profile?.preferences ?? null, effectiveTravel);
+    prefs.interests = interests;
     const result = await savePreferences(prefs);
     setSaving(false);
     if (result.success) router.replace("/");
@@ -177,6 +186,40 @@ export function OnboardingClient() {
             requireDragToActivate={true}
             onAllSlidersActivated={() => setAllSlidersActivated(true)}
           />
+
+          <div className="mt-6 mb-4">
+            <p className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
+              Attraction types you like (optional)
+            </p>
+            <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>
+              Select the kinds of attractions you enjoy.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {ATTRACTION_TYPES.map((type) => {
+                const selected = interests.includes(type);
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    className="rounded-full px-3 py-1.5 text-sm border transition-colors capitalize"
+                    style={{
+                      borderColor: selected ? "var(--accent-green)" : "var(--border)",
+                      background: selected ? "var(--accent-green-light)" : "transparent",
+                      color: selected ? "var(--accent-green)" : "var(--text-primary)",
+                    }}
+                    onClick={() =>
+                      setInterests((prev) =>
+                        selected ? prev.filter((i) => i !== type) : [...prev, type]
+                      )
+                    }
+                  >
+                    {type}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {!allSlidersActivated && (
             <p className="mt-4 text-xs text-center" style={{ color: "var(--text-muted)" }}>
               Drag each point left or right to set your preference — then Continue will unlock.
