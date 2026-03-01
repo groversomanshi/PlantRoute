@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { WorldMap } from "@/components/Map/WorldMap";
 import { CityModal } from "@/components/Map/CityModal";
 import { CitySearchBar } from "@/components/Map/CitySearchBar";
 import { ItineraryBuilder } from "@/components/Itinerary/ItineraryBuilder";
 import { Sidebar } from "@/components/Sidebar";
+import { MessageCircle } from "lucide-react";
 import type { GeoPoint } from "@/types";
 
 interface HomeClientProps {
@@ -21,11 +22,60 @@ export function HomeClient({ useMapbox }: HomeClientProps) {
   const [flyToCity, setFlyToCity] = useState<GeoPoint | null>(null);
   const pastTripCities: string[] = useMemo(() => [], []);
 
+  const [agentQuery, setAgentQuery] = useState("");
+  const [agentResult, setAgentResult] = useState<string | null>(null);
+  const [agentError, setAgentError] = useState<string | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [retrySecondsRemaining, setRetrySecondsRemaining] = useState<number | null>(null);
+  const [agentMinimized, setAgentMinimized] = useState(false);
+
+  useEffect(() => {
+    if (retrySecondsRemaining == null || retrySecondsRemaining <= 0) return;
+    const id = setInterval(() => {
+      setRetrySecondsRemaining((s) => {
+        if (s == null || s <= 1) {
+          setAgentError(null);
+          return null;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [retrySecondsRemaining]);
+
   const handleSearchFlyTo = useCallback((city: GeoPoint) => {
     setFlyToCity(city);
-    // Reset flyToCity after animation so repeat searches work
     setTimeout(() => setFlyToCity(null), 2000);
   }, []);
+
+  const handleAskAgent = useCallback(async () => {
+    const q = agentQuery.trim();
+    if (!q) return;
+    setAgentLoading(true);
+    setAgentError(null);
+    setAgentResult(null);
+    setRetrySecondsRemaining(null);
+    try {
+      const res = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      const data = (await res.json()) as { text?: string; error?: string; retryAfterSeconds?: number };
+      if (!res.ok) {
+        setAgentError(data.error ?? "Search failed");
+        if (res.status === 429 && data.retryAfterSeconds != null && data.retryAfterSeconds > 0) {
+          setRetrySecondsRemaining(data.retryAfterSeconds);
+        }
+        return;
+      }
+      setAgentResult(data.text ?? "");
+    } catch (e) {
+      setAgentError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setAgentLoading(false);
+    }
+  }, [agentQuery]);
 
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
@@ -59,6 +109,83 @@ export function HomeClient({ useMapbox }: HomeClientProps) {
                   onCitySelect={setSelectedCity}
                   onFlyTo={handleSearchFlyTo}
                 />
+              </div>
+            </div>
+
+            {/* Ask an AI Travel Agent - bottom right, live Google AI search */}
+            <div className="absolute bottom-3 right-3 w-full max-w-sm pointer-events-auto z-10">
+              <div
+                className="rounded-xl border shadow-lg backdrop-blur-sm overflow-hidden"
+                style={{ borderColor: "rgba(45, 106, 79, 0.2)", backgroundColor: "rgba(250, 248, 245, 0.97)" }}
+              >
+                <div
+                  className="px-3 py-2 border-b flex items-center justify-between gap-2"
+                  style={{ borderColor: "rgba(45, 106, 79, 0.15)", backgroundColor: "#2d6a4f" }}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <MessageCircle className="w-4 h-4 text-white shrink-0" aria-hidden />
+                    <div className="min-w-0">
+                      <h2 className="font-semibold text-white text-sm truncate">Ask an AI Travel Agent</h2>
+                      {!agentMinimized && (
+                        <p className="text-white/80 text-[11px] mt-0.5">
+                          Live Google AI Search — destinations, tips, sustainability.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAgentMinimized((m) => !m)}
+                    className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white font-medium text-lg hover:bg-white/20 transition-colors"
+                    style={{ backgroundColor: "rgba(0,0,0,0.15)" }}
+                    aria-label={agentMinimized ? "Expand" : "Minimize"}
+                  >
+                    {agentMinimized ? "+" : "−"}
+                  </button>
+                </div>
+                {!agentMinimized && (
+                  <div className="p-2.5 space-y-2" style={{ backgroundColor: "rgba(250, 248, 245, 0.5)" }}>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={agentQuery}
+                        onChange={(e) => setAgentQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleAskAgent()}
+                        placeholder="e.g. Eco hotels in Rome?"
+                        className="flex-1 min-w-0 rounded-lg border px-2.5 py-2 text-xs placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#2d6a4f]/50 focus:border-[#2d6a4f]"
+                        style={{ borderColor: "rgba(45, 106, 79, 0.2)", backgroundColor: "#fdfcfb" }}
+                        disabled={agentLoading}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAskAgent}
+                        disabled={agentLoading}
+                        className="rounded-lg px-3 py-2 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        style={{ backgroundColor: "#2d6a4f" }}
+                      >
+                        {agentLoading ? "…" : "Ask"}
+                      </button>
+                    </div>
+                    {(agentResult !== null || agentError) && (
+                      <div
+                        className="max-h-36 overflow-y-auto rounded-lg border p-2.5 text-xs text-gray-800"
+                        style={{ borderColor: "rgba(45, 106, 79, 0.12)", backgroundColor: "#f7f5f0" }}
+                      >
+                        {agentError && (
+                          <p className="text-red-600">
+                            {agentError}
+                            {retrySecondsRemaining != null && retrySecondsRemaining > 0 && (
+                              <> Retry in ~{retrySecondsRemaining}s.</>
+                            )}
+                          </p>
+                        )}
+                        {agentResult !== null && !agentError && (
+                          <p className="whitespace-pre-wrap leading-relaxed">{agentResult}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
