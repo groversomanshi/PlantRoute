@@ -3,6 +3,8 @@ import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
+// For local dev, set NEXTAUTH_URL=http://localhost:3000 in .env.local to avoid CLIENT_FETCH_ERROR.
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [

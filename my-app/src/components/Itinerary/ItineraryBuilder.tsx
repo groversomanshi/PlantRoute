@@ -38,8 +38,7 @@ export function ItineraryBuilder({
   const [step, setStep] = useState(1);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [prefText, setPrefText] = useState(initialPreferences?.raw_text ?? "");
-  const [preferences, setPreferences] = useState<UserPreferences | null>(
+  const [preferences] = useState<UserPreferences | null>(
     initialPreferences ?? null
   );
   const [hotels, setHotels] = useState<Hotel[]>([]);
@@ -59,27 +58,15 @@ export function ItineraryBuilder({
     useState<TransportSegment | null>(null);
   const [loadingHotels, setLoadingHotels] = useState(false);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  const [hotelSuggestionReason, setHotelSuggestionReason] = useState<string | null>(null);
   const [loadingFlights, setLoadingFlights] = useState(false);
   const [building, setBuilding] = useState(false);
   const [finalItinerary, setFinalItinerary] = useState<Itinerary | null>(null);
   const [regretItinerary, setRegretItinerary] = useState<Itinerary | null>(null);
+  const [originalItineraryForRegret, setOriginalItineraryForRegret] = useState<Itinerary | null>(null);
 
   const cityName = city.name.split(",")[0]?.trim() ?? city.name;
   const destIata = getCityIata(cityName);
-
-  const parsePrefs = useCallback(async () => {
-    const text = prefText.replace(/<[^>]*>/g, "").trim().slice(0, 2000);
-    if (!text) return;
-    const res = await fetch("/api/infer/parse_prefs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    setPreferences(data.preferences ?? null);
-  }, [prefText]);
 
   const prefs: UserPreferences = preferences ?? {
     interests: ["culture", "outdoor"],
@@ -90,8 +77,44 @@ export function ItineraryBuilder({
   };
 
   useEffect(() => {
-    if (step === 3 && startDate && endDate) {
-      setLoadingHotels(true);
+    if (step !== 3 || !startDate || !endDate) return;
+    setLoadingHotels(true);
+    setHotelSuggestionReason(null);
+    const selectedAttractions = activities.filter((a) => selectedActivityIds.has(a.id));
+    if (selectedAttractions.length > 0) {
+      fetch("/api/recommendations/hotel-by-proximity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          city: cityName,
+          checkIn: startDate,
+          checkOut: endDate,
+          selectedAttractions: selectedAttractions.map((a) => ({
+            id: a.id,
+            name: a.name,
+            category: a.category,
+            location: a.location,
+          })),
+        }),
+        signal: AbortSignal.timeout(15000),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          setHotels(d.hotels ?? []);
+          if (d.suggestedHotel) setSelectedHotel(d.suggestedHotel);
+          if (d.reason) setHotelSuggestionReason(d.reason);
+        })
+        .catch(() => {
+          fetch(
+            `/api/amadeus/hotels?city=${encodeURIComponent(cityName)}&checkIn=${startDate}&checkOut=${endDate}`,
+            { signal: AbortSignal.timeout(10000) }
+          )
+            .then((r) => r.json())
+            .then((d) => setHotels(d.hotels ?? []))
+            .catch(() => setHotels([]));
+        })
+        .finally(() => setLoadingHotels(false));
+    } else {
       fetch(
         `/api/amadeus/hotels?city=${encodeURIComponent(cityName)}&checkIn=${startDate}&checkOut=${endDate}`,
         { signal: AbortSignal.timeout(10000) }
@@ -106,10 +129,23 @@ export function ItineraryBuilder({
   const interestsParam = (preferences?.interests ?? ["culture", "outdoor"]).join(",");
 
   useEffect(() => {
-    if (step === 4) {
+    if (startDate && startDate < todayIso) {
+      setStartDate(todayIso);
+    }
+  }, [startDate, todayIso]);
+
+  useEffect(() => {
+    const minCheckout = startDate || todayIso;
+    if (endDate && endDate < minCheckout) {
+      setEndDate(minCheckout);
+    }
+  }, [endDate, startDate, todayIso]);
+
+  useEffect(() => {
+    if (step === 2) {
       setLoadingActivities(true);
       fetch(
-        `/api/amadeus/activities?city=${encodeURIComponent(cityName)}&interests=${encodeURIComponent(interestsParam)}&limit=20`,
+        `/api/recommendations/activities?city=${encodeURIComponent(cityName)}&limit=20`,
         { signal: AbortSignal.timeout(10000) }
       )
         .then((r) => r.json())
@@ -117,10 +153,10 @@ export function ItineraryBuilder({
         .catch(() => setActivities([]))
         .finally(() => setLoadingActivities(false));
     }
-  }, [step, cityName, interestsParam]);
+  }, [step, cityName]);
 
   useEffect(() => {
-    if (step === 6 && startDate && endDate) {
+    if (step === 5 && startDate && endDate) {
       setLoadingFlights(true);
       Promise.all([
         fetch(
@@ -143,6 +179,7 @@ export function ItineraryBuilder({
         .finally(() => setLoadingFlights(false));
     }
   }, [step, startDate, endDate, destIata]);
+
 
   const handleActivityToggle = useCallback((activity: Activity) => {
     setSelectedActivityIds((prev) => {
@@ -178,10 +215,20 @@ export function ItineraryBuilder({
     endDate,
   ]);
 
+  const handleCreateDailyPlan = useCallback(async () => {
+    setStep(5);
+    setGeneratingPlan(true);
+    try {
+      await handleScheduleActivities();
+    } finally {
+      setGeneratingPlan(false);
+    }
+  }, [handleScheduleActivities]);
+
   const buildFinalItinerary = useCallback(async () => {
     if (!selectedHotel || dailyPlan.length === 0) return;
     setBuilding(true);
-    setStep(7);
+    setStep(6);
     try {
       const days: ItineraryDay[] = dailyPlan.map((d, i) => ({
         ...d,
@@ -249,7 +296,7 @@ export function ItineraryBuilder({
       } else {
         setFinalItinerary(itinerary);
       }
-      setStep(8);
+      setStep(7);
     } catch (e) {
       console.error(e);
     } finally {
@@ -271,6 +318,7 @@ export function ItineraryBuilder({
   };
 
   const interActivitySegments = dailyPlan.flatMap((d) => d.transport);
+  const isExpandedPanel = step >= 5;
 
   return (
     <>
@@ -292,12 +340,38 @@ export function ItineraryBuilder({
             borderColor: "var(--border)",
           }}
         >
-          <h2
-            className="text-lg font-display font-semibold"
-            style={{ color: "var(--text-primary)" }}
-          >
-            Build itinerary · {cityName}
-          </h2>
+          <div className="flex items-center gap-2">
+            {(step === 2 || step === 3 || step === 4 || step === 5) && (
+              <button
+                type="button"
+                onClick={() => setStep(step - 1)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border hover:opacity-90"
+                style={{
+                  borderColor: "var(--border)",
+                  color: "var(--text-primary)",
+                  background: "var(--bg-elevated)",
+                }}
+                aria-label={
+                  step === 5
+                    ? "Back to activities"
+                    : step === 4
+                      ? "Back to hotels"
+                      : step === 3
+                        ? "Back to preferences"
+                        : "Back to dates"
+                }
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-xs font-medium">Back</span>
+              </button>
+            )}
+            <h2
+              className="text-lg font-display font-semibold"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Build itinerary · {cityName}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -374,50 +448,33 @@ export function ItineraryBuilder({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="space-y-4"
+                className="space-y-4 min-h-[72vh] flex flex-col"
               >
-                <p
-                  className="text-sm"
-                  style={{ color: "var(--text-muted)" }}
+                <h3
+                  className="font-medium"
+                  style={{ color: "var(--text-primary)" }}
                 >
-                  Tell us what you love (e.g. hiking, local food, museums, low
-                  carbon travel)
+                  1. Choose activities
+                </h3>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  Ranked by your interests and low carbon.
                 </p>
-                <textarea
-                  value={prefText}
-                  onChange={(e) =>
-                    setPrefText(e.target.value.slice(0, 2000))
-                  }
-                  onBlur={() => parsePrefs()}
-                  maxLength={2000}
-                  rows={4}
-                  className="w-full rounded-xl border px-4 py-3 resize-none"
-                  style={{ borderColor: "var(--border)" }}
-                  placeholder="I love local food and hate flying..."
-                />
-                {preferences && (
-                  <div className="flex flex-wrap gap-2">
-                    {preferences.interests.map((i) => (
-                      <span
-                        key={i}
-                        className="rounded-full px-3 py-1 text-sm"
-                        style={{
-                          background: "var(--accent-green-light)",
-                          color: "var(--accent-green)",
-                        }}
-                      >
-                        {i}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <div className="flex-1 min-h-0">
+                  <ActivitySelector
+                    activities={activities}
+                    selectedIds={selectedActivityIds}
+                    onToggle={handleActivityToggle}
+                    loading={loadingActivities}
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={() => parsePrefs().then(() => setStep(3))}
-                  className="w-full py-3 rounded-xl font-medium text-white"
+                  onClick={() => setStep(3)}
+                  disabled={selectedActivityIds.size === 0}
+                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50 mt-auto"
                   style={{ background: "#2d6a4f" }}
                 >
-                  Next
+                  Next: choose hotel
                 </button>
               </motion.div>
             )}
@@ -434,8 +491,13 @@ export function ItineraryBuilder({
                   className="font-medium"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  1. Choose your hotel
+                  2. Choose your hotel
                 </h3>
+                {hotelSuggestionReason && (
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                    Suggested for proximity: {hotelSuggestionReason}
+                  </p>
+                )}
                 <HotelSelector
                   hotels={hotels}
                   selectedHotel={selectedHotel}
@@ -444,12 +506,12 @@ export function ItineraryBuilder({
                 />
                 <button
                   type="button"
-                  onClick={() => setStep(4)}
-                  disabled={!selectedHotel}
+                  onClick={handleCreateDailyPlan}
+                  disabled={!selectedHotel || selectedActivityIds.size === 0 || generatingPlan}
                   className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
                   style={{ background: "#2d6a4f" }}
                 >
-                  Next
+                  {generatingPlan ? "Creating daily plan…" : "Create daily plan"}
                 </button>
               </motion.div>
             )}
@@ -460,7 +522,7 @@ export function ItineraryBuilder({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="space-y-4"
+                className="space-y-4 min-h-[72vh] flex flex-col"
               >
                 <h3
                   className="font-medium"
@@ -468,20 +530,22 @@ export function ItineraryBuilder({
                 >
                   2. Choose activities
                 </h3>
-                <ActivitySelector
-                  activities={activities}
-                  selectedIds={selectedActivityIds}
-                  onToggle={handleActivityToggle}
-                  loading={loadingActivities}
-                />
+                <div className="flex-1 min-h-0">
+                  <ActivitySelector
+                    activities={activities}
+                    selectedIds={selectedActivityIds}
+                    onToggle={handleActivityToggle}
+                    loading={loadingActivities}
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={() => setStep(5)}
-                  disabled={selectedActivityIds.size === 0}
-                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
+                  onClick={handleCreateDailyPlan}
+                  disabled={selectedActivityIds.size === 0 || generatingPlan}
+                  className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50 mt-auto"
                   style={{ background: "#2d6a4f" }}
                 >
-                  Create daily plan
+                  {generatingPlan ? "Creating daily plan…" : "Create daily plan"}
                 </button>
               </motion.div>
             )}
@@ -565,7 +629,7 @@ export function ItineraryBuilder({
                     </div>
                     <button
                       type="button"
-                      onClick={() => setStep(6)}
+                      onClick={() => setStep(5)}
                       className="w-full py-3 rounded-xl font-medium text-white"
                       style={{ background: "#2d6a4f" }}
                     >
@@ -576,9 +640,9 @@ export function ItineraryBuilder({
               </motion.div>
             )}
 
-            {step === 6 && (
+            {step === 5 && (
               <motion.div
-                key="step6"
+                key="step5"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -588,7 +652,7 @@ export function ItineraryBuilder({
                   className="font-medium"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  3. Travel options
+                  Travel options
                 </h3>
                 <TravelOptionsPanel
                   arrivalOptions={arrivalOptions}
@@ -612,9 +676,9 @@ export function ItineraryBuilder({
               </motion.div>
             )}
 
-            {(step === 7 || building) && (
+            {(step === 6 || building) && (
               <motion.div
-                key="step7"
+                key="building"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -644,9 +708,9 @@ export function ItineraryBuilder({
               </motion.div>
             )}
 
-            {step === 8 && finalItinerary && !building && (
+            {step === 7 && finalItinerary && !building && (
               <motion.div
-                key="step8"
+                key="step7"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -699,9 +763,12 @@ export function ItineraryBuilder({
                   <div className="space-y-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        setRegretItinerary(finalItinerary)
-                      }
+                      onClick={() => {
+                        setOriginalItineraryForRegret((prev) =>
+                          prev ?? (JSON.parse(JSON.stringify(finalItinerary)) as Itinerary)
+                        );
+                        setRegretItinerary(finalItinerary);
+                      }}
                       className="w-full py-2 px-4 rounded-xl text-sm font-medium border"
                       style={{
                         borderColor: "var(--accent-green)",
@@ -729,10 +796,12 @@ export function ItineraryBuilder({
         </div>
       </motion.div>
 
-      {regretItinerary && (
+      {regretItinerary && originalItineraryForRegret && (
         <RegretModal
           itinerary={regretItinerary}
+          originalItinerary={originalItineraryForRegret}
           onClose={() => setRegretItinerary(null)}
+          onKeepOriginal={() => setFinalItinerary(originalItineraryForRegret)}
           onSwitch={(alt) => {
             setFinalItinerary(alt);
             setRegretItinerary(null);

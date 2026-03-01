@@ -172,3 +172,21 @@ export const ScheduleActivitiesSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   hotel: hotelSchema,
 });
+
+/** Request body: suggest hotel by proximity to selected attractions (attractions first, then hotel). */
+export const HotelByProximitySchema = z.object({
+  city: z.string().min(1).max(100).trim(),
+  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  selectedAttractions: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().max(200),
+        category: z.string().max(50).optional(),
+        location: geoPointSchema,
+      })
+    )
+    .min(1)
+    .max(50),
+});
