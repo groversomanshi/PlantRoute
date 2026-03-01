@@ -7,11 +7,15 @@ import { formatPrice } from "@/lib/utils";
 
 interface RegretModalProps {
   itinerary: Itinerary;
+  /** When provided, the "Original" panel shows this instead of itinerary (so the true original is shown even after switching). */
+  originalItinerary?: Itinerary;
   onClose: () => void;
+  onKeepOriginal: () => void;
   onSwitch: (alternative: Itinerary) => void;
 }
 
-export function RegretModal({ itinerary, onClose, onSwitch }: RegretModalProps) {
+export function RegretModal({ itinerary, originalItinerary, onClose, onKeepOriginal, onSwitch }: RegretModalProps) {
+  const displayOriginal = originalItinerary ?? itinerary;
   const [savingsKg, setSavingsKg] = useState<number | null>(null);
   const [alternative, setAlternative] = useState<Itinerary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,8 +74,8 @@ export function RegretModal({ itinerary, onClose, onSwitch }: RegretModalProps) 
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="rounded-xl p-4 border" style={{ borderColor: "var(--border)" }}>
                 <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Original</p>
-                <p className="font-medium">{formatPrice(itinerary.total_price_usd)}</p>
-                <p className="text-sm">{itinerary.total_emission_kg.toFixed(0)} kg CO₂e</p>
+                <p className="font-medium">{formatPrice(displayOriginal.total_price_usd)}</p>
+                <p className="text-sm">{displayOriginal.total_emission_kg.toFixed(0)} kg CO₂e</p>
               </div>
               <div className="rounded-xl p-4 border" style={{ borderColor: "var(--accent-green-mid)" }}>
                 <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Alternative</p>
@@ -82,7 +86,10 @@ export function RegretModal({ itinerary, onClose, onSwitch }: RegretModalProps) 
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => {
+                  onKeepOriginal();
+                  onClose();
+                }}
                 className="flex-1 py-3 rounded-xl font-medium border"
                 style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
               >
