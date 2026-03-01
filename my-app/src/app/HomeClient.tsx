@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import { WorldMap } from "@/components/Map/WorldMap";
 import { CityModal } from "@/components/Map/CityModal";
 import { CitySearchBar } from "@/components/Map/CitySearchBar";
@@ -180,7 +181,9 @@ export function HomeClient({ useMapbox }: HomeClientProps) {
                           </p>
                         )}
                         {agentResult !== null && !agentError && (
-                          <p className="whitespace-pre-wrap leading-relaxed">{agentResult}</p>
+                          <div className="prose prose-sm prose-gray max-w-none prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0">
+                            <ReactMarkdown>{agentResult}</ReactMarkdown>
+                          </div>
                         )}
                       </div>
                     )}
