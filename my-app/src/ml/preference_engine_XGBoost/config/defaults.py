@@ -1,10 +1,13 @@
 # Config for preference_engine_XGBoost
 
+import os
 from pathlib import Path
 
 _ENGINE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_MODEL_PATH = _ENGINE_DIR / "artifacts" / "model.joblib"
-DEFAULT_TRAIN_SAMPLES = 20_000
+_DEFAULT = _ENGINE_DIR / "artifacts" / "model.joblib"
+# Modal sets PREFERENCE_ENGINE_XGBOOST_MODEL_PATH so the container finds the model
+DEFAULT_MODEL_PATH = Path(os.environ.get("PREFERENCE_ENGINE_XGBOOST_MODEL_PATH", str(_DEFAULT)))
+DEFAULT_TRAIN_SAMPLES = 100_000
 DEFAULT_RANDOM_STATE = 42
 DEFAULT_CLASSIFIER = "xgboost"
 LOGISTIC_C = 1.0

@@ -25,7 +25,7 @@ const categoryIcons: Record<string, React.ComponentType<{ className?: string }>>
 };
 
 interface ActivitySelectorProps {
-  activities: Activity[];
+  activities: (Activity & { fit_score?: number; explanation?: string[] | null })[];
   selectedIds: Set<string>;
   onToggle: (activity: Activity) => void;
   loading?: boolean;
@@ -67,6 +67,7 @@ export function ActivitySelector({
           const Icon =
             categoryIcons[activity.category?.toLowerCase() ?? ""] ?? MapPin;
           const emission = activity.emission_kg ?? 0;
+          const fitScore = "fit_score" in activity ? activity.fit_score : undefined;
 
           return (
             <motion.button
@@ -98,9 +99,23 @@ export function ActivitySelector({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-medium" style={{ color: "var(--text-primary)" }}>
-                  {activity.name}
-                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-medium" style={{ color: "var(--text-primary)" }}>
+                    {activity.name}
+                  </h3>
+                  {fitScore != null && (
+                    <span
+                      className="text-xs font-medium rounded-full px-2 py-0.5"
+                      style={{
+                        background: "var(--accent-green-light)",
+                        color: "var(--accent-green)",
+                      }}
+                      title="Match to your interests"
+                    >
+                      {Math.round(fitScore * 100)}% match
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                   {activity.duration_hours}h · {formatPrice(activity.price_usd)}
                 </p>

@@ -1,7 +1,9 @@
 """
-PlantRoute preference engine on Modal.
+PlantRoute preference engine on Modal (linear regression).
 Regret-risk prediction: user_preferences + itinerary_item -> regret_probability + reasons.
-Deploy from my-app: modal deploy modal_apps/preference_engine.py
+
+NOT USED for attraction recommendations; the app uses the XGBoost engine (see preference_engine_xgboost.py).
+Code kept for reference. Deploy from my-app: modal deploy modal_apps/preference_engine.py
 Ensure src/ml/preference_engine/data/model.pkl exists (run: python -m ml.preference_engine.train from src/).
 """
 

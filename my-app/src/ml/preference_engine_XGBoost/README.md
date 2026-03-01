@@ -33,9 +33,28 @@ uvicorn ml.preference_engine_XGBoost.api:app --reload
 - `POST /batch_score` — list of activities
 - `GET /health`
 
+## Run on Modal
+
+**First-time setup:** Install Modal and log in (from `my-app`):
+
+```bash
+pip install -r modal_apps/requirements.txt
+modal token new
+```
+
+(Sign up at modal.com if needed; the CLI will open a browser.)
+
+From `my-app` (after training so `artifacts/model.joblib` exists):
+
+```bash
+modal deploy modal_apps/preference_engine_xgboost.py
+```
+
+Set **`PREFERENCE_ENGINE_XGBOOST_URL`** to the deployed URL (e.g. `https://<workspace>--preference-engine-xgboost.modal.run`). The app uses this for ranking attractions; the linear-regression preference engine (`ml/preference_engine` and `modal_apps/preference_engine.py`) is no longer used for recommendations but remains in the repo.
+
 ## Use from Next.js
 
 - **Ranked activities API:** `GET /api/recommendations/activities?city=...&limit=...`  
   Fetches activities for the city, loads user preferences (travel + `likedAttractionTypes` → `interests`), calls this engine when `PREFERENCE_ENGINE_XGBOOST_URL` is set, otherwise ranks by interest match + emission. Returns `{ activities: RankedActivity[] }` (each with `fit_score`, optional `regret_probability`, `explanation`).
 
-- **Env:** Set `PREFERENCE_ENGINE_XGBOOST_URL` (e.g. `http://localhost:8000`) to use the XGBoost engine; if unset, the app uses fallback ranking.
+- **Env:** Set `PREFERENCE_ENGINE_XGBOOST_URL` to your Modal URL (or `http://localhost:8000` for local) to use the XGBoost engine; if unset, the app uses fallback ranking.

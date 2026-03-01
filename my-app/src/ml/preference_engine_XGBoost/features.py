@@ -10,6 +10,44 @@ ATTRACTION_TYPES = [
     "nightlife", "wellness", "beach", "ski",
 ]
 
+# Continuous similarity between categories [0, 1]. Same=1.0, related=0.6–0.85, weak=0.2–0.4, unrelated=0.
+# Keys (a, b) with a <= b; lookup with (min(a,b), max(a,b)).
+def _sim_key(a: str, b: str) -> tuple[str, str]:
+    return (min(a, b), max(a, b))
+
+_CAT_SIM: dict[tuple[str, str], float] = {}
+for c in ATTRACTION_TYPES:
+    _CAT_SIM[_sim_key(c, c)] = 1.0
+# Close pairs (many distinct values for continuous training)
+for (a, b), s in [
+    (("museum", "culture"), 0.88),
+    (("nature", "outdoor"), 0.85),
+    (("culture", "outdoor"), 0.52),
+    (("museum", "nature"), 0.48),
+    (("outdoor", "wellness"), 0.58),
+    (("nature", "wellness"), 0.55),
+    (("food", "wellness"), 0.42),
+    (("beach", "outdoor"), 0.72),
+    (("beach", "nature"), 0.65),
+    (("ski", "outdoor"), 0.70),
+    (("ski", "nature"), 0.62),
+    (("nightlife", "food"), 0.45),
+    (("culture", "museum"), 0.88),  # already set via (museum, culture)
+]:
+    _CAT_SIM[_sim_key(a, b)] = s
+# Weaker links so we get more spread in [0.2, 0.5]
+for (a, b), s in [
+    (("museum", "food"), 0.28),
+    (("culture", "food"), 0.32),
+    (("outdoor", "food"), 0.35),
+    (("nightlife", "culture"), 0.38),
+    (("wellness", "beach"), 0.50),
+    (("wellness", "ski"), 0.45),
+]:
+    _CAT_SIM[_sim_key(a, b)] = s
+
+NEUTRAL_NO_INTERESTS = 0.5
+
 # Feature names in fixed order for training and inference
 FEATURE_NAMES = [
     "interest_match",
@@ -21,9 +59,11 @@ FEATURE_NAMES = [
     "budget_level",
     "planning_vs_spontaneity",
     "noise_sensitivity",
+    "eco_preference",
     "duration_norm",
     "emission_norm",
     "price_norm",
+    "emission_fit",
     "crowd_mismatch",
     "early_start_mismatch",
     "late_night_mismatch",
@@ -32,13 +72,21 @@ FEATURE_NAMES = [
 ]
 
 
+def category_similarity(interest: str, category: str) -> float:
+    """Continuous similarity in [0, 1] from predefined matrix; 0 if either not in ATTRACTION_TYPES."""
+    a, b = interest.strip().lower(), (category or "").strip().lower()
+    if a not in ATTRACTION_TYPES or b not in ATTRACTION_TYPES:
+        return 1.0 if a == b else 0.0
+    return _CAT_SIM.get(_sim_key(a, b), 0.0)
+
+
 def interest_match(interests: list[str], category: str) -> float:
-    """1.0 if category in interests (or interests empty), else 0.0."""
+    """Continuous match in [0, 1]: max similarity between activity category and any user interest."""
     cat = (category or "").strip().lower()
     if not interests:
-        return 0.5  # neutral when no interests specified
+        return NEUTRAL_NO_INTERESTS
     normalized = [s.strip().lower() for s in interests if s]
-    return 1.0 if cat in normalized else 0.0
+    return max(category_similarity(i, cat) for i in normalized)
 
 
 def build_features(
@@ -61,8 +109,11 @@ def build_features(
     budget_mismatch = max(0.0, price_norm - travel.budget_level)
     pace_duration_mismatch = max(0.0, duration_norm - travel.trip_pace)
 
+    eco = getattr(travel, "eco_preference", 0.5)
+    emission_fit = 1.0 - min(1.0, (eco * emission_norm * 1.15))
+
     out = {
-        "interest_match": interest_match(interests, cat),
+        "interest_match": round(interest_match(interests, cat), 6),
         "trip_pace": travel.trip_pace,
         "crowd_comfort": travel.crowd_comfort,
         "morning_tolerance": travel.morning_tolerance,
@@ -71,9 +122,11 @@ def build_features(
         "budget_level": travel.budget_level,
         "planning_vs_spontaneity": travel.planning_vs_spontaneity,
         "noise_sensitivity": travel.noise_sensitivity,
+        "eco_preference": eco,
         "duration_norm": round(duration_norm, 6),
         "emission_norm": round(emission_norm, 6),
         "price_norm": round(price_norm, 6),
+        "emission_fit": round(emission_fit, 6),
         "crowd_mismatch": round(crowd_mismatch, 6),
         "early_start_mismatch": round(early_start_mismatch, 6),
         "late_night_mismatch": round(late_night_mismatch, 6),

@@ -19,6 +19,7 @@ Build travel itineraries with carbon impact. Pick a destination on the map, desc
    - **SUPERMEMORY_API_KEY** — [Supermemory](https://supermemory.ai/) for saving/retrieving user preferences and trip history. Required for profile and save-preferences flows.
    - **MODAL_TOKEN** — Optional. If set, carbon calculation is done via Modal; otherwise a local TypeScript carbon predictor runs.
    - **NEXTAUTH_SECRET** — Run `openssl rand -base64 32` to generate.
+   - **NEXTAUTH_URL** — In local dev set to `http://localhost:3000` (or your dev URL). Fixes NextAuth `CLIENT_FETCH_ERROR` if the session endpoint is unreachable.
    - **GOOGLE_CLIENT_ID** / **GOOGLE_CLIENT_SECRET** — [Google OAuth](https://console.cloud.google.com/) for sign-in.
    - **UPSTASH_REDIS_REST_URL** / **UPSTASH_REDIS_REST_TOKEN** — Optional; for production rate limiting. If omitted, in-memory rate limiting is used (single instance only).
    - **RATE_LIMIT_ENABLED** — Set to `true` to enable rate limiting (default).

@@ -13,6 +13,7 @@ class TravelPreferencesInput(BaseModel):
     budget_level: float = Field(0.5, ge=0.0, le=1.0)
     planning_vs_spontaneity: float = Field(0.5, ge=0.0, le=1.0)
     noise_sensitivity: float = Field(0.5, ge=0.0, le=1.0)
+    eco_preference: float = Field(0.5, ge=0.0, le=1.0)  # 0 = don't care, 1 = strongly prefer low carbon
 
 
 class ActivityInput(BaseModel):

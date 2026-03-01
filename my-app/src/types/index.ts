@@ -90,6 +90,8 @@ export interface TravelPreferences {
   budget_level: number; // 0 = budget, 1 = premium
   planning_vs_spontaneity: number; // 0 = mostly free time, 1 = mostly pre-planned
   noise_sensitivity: number; // 0 = very sensitive, 1 = don't mind noise
+  /** 0 = don't care about carbon, 1 = strongly prefer low-carbon options */
+  eco_preference?: number;
   dislike_heat: boolean;
   dislike_cold: boolean;
   dislike_rain: boolean;
@@ -137,6 +139,7 @@ export const DEFAULT_TRAVEL_PREFERENCES: TravelPreferences = {
   budget_level: 0.5,
   planning_vs_spontaneity: 0.5,
   noise_sensitivity: 0.5,
+  eco_preference: 0.5,
   dislike_heat: false,
   dislike_cold: false,
   dislike_rain: false,

@@ -1,0 +1,4 @@
+# For deploying Modal apps (XGBoost preference engine, etc.)
+# Install: pip install -r modal_apps/requirements.txt
+# Then: modal token new  (sign up / log in at modal.com)
+modal>=0.64.0

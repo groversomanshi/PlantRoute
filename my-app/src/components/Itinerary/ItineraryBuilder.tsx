@@ -143,7 +143,7 @@ export function ItineraryBuilder({
       setLoadingActivities(true);
       fetch(
         `/api/recommendations/activities?city=${encodeURIComponent(cityName)}&limit=20`,
-        { signal: AbortSignal.timeout(10000) }
+        { signal: AbortSignal.timeout(50000) }
       )
         .then((r) => r.json())
         .then((d) => setActivities(d.activities ?? []))

@@ -9,16 +9,18 @@
     "budget_level",
     "planning_vs_spontaneity",
     "noise_sensitivity",
+    "eco_preference",
     "duration_norm",
     "emission_norm",
     "price_norm",
+    "emission_fit",
     "crowd_mismatch",
     "early_start_mismatch",
     "late_night_mismatch",
     "budget_mismatch",
     "pace_duration_mismatch"
   ],
-  "n_samples": 20000,
-  "val_accuracy": 1.0,
-  "val_roc_auc": 1.0
+  "n_samples": 100000,
+  "val_accuracy": 0.8331,
+  "val_roc_auc": 0.8862443649848593
 }

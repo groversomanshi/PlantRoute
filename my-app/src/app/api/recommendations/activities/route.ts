@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const data = (await res.json()) as { activities?: Activity[] };
     activities = Array.isArray(data.activities) ? data.activities : [];
   } catch (e) {
-    console.error(String(e));
+    console.error("[recommendations] Failed to fetch activities:", String(e));
     return NextResponse.json(
       { error: "Failed to fetch activities", activities: [] },
       { status: 502 }
@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (activities.length === 0) {
+    console.warn("[recommendations] No activities from Amadeus for city:", city);
     return NextResponse.json({ activities: [] });
   }
 
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
     try {
       const body = buildBatchScoreRequest(preferences, activities);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 45000);
       const res = await fetch(`${engineUrl.replace(/\/$/, "")}/batch_score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,9 +88,12 @@ export async function GET(req: NextRequest) {
         }));
         ranked = mergeAndRank(activities, scores);
       } else {
+        const errText = await res.text().catch(() => "");
+        console.warn("[recommendations] Engine non-OK:", res.status, errText.slice(0, 200));
         ranked = rankActivitiesFallback(activities, preferences?.interests ?? []);
       }
-    } catch {
+    } catch (e) {
+      console.warn("[recommendations] Engine request failed, using fallback:", String(e));
       ranked = rankActivitiesFallback(activities, preferences?.interests ?? []);
     }
   } else {
