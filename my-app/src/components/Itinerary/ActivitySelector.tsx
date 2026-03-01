@@ -61,7 +61,7 @@ export function ActivitySelector({
       <p className="text-sm" style={{ color: "var(--text-muted)" }}>
         Select activities you want to do. We&apos;ll arrange them into a daily plan.
       </p>
-      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[52vh] md:max-h-[60vh] overflow-y-auto px-1 py-1">
         {activities.map((activity) => {
           const isSelected = selectedIds.has(activity.id);
           const Icon =
@@ -73,9 +73,9 @@ export function ActivitySelector({
               key={activity.id}
               type="button"
               onClick={() => onToggle(activity)}
-              whileHover={{ scale: 1.01 }}
+              whileHover={{ scale: 1.01, zIndex: 10 }}
               whileTap={{ scale: 0.99 }}
-              className="w-full text-left rounded-xl p-4 border-2 transition-colors flex items-start gap-3"
+              className="relative w-full text-left rounded-xl p-4 border-2 transition-colors flex items-start gap-3"
               style={{
                 background: isSelected ? "var(--accent-green-light)" : "var(--bg-elevated)",
                 borderColor: isSelected ? "var(--accent-green)" : "var(--border)",
