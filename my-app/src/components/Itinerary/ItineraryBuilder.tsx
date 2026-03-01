@@ -63,6 +63,7 @@ export function ItineraryBuilder({
   const [building, setBuilding] = useState(false);
   const [finalItinerary, setFinalItinerary] = useState<Itinerary | null>(null);
   const [regretItinerary, setRegretItinerary] = useState<Itinerary | null>(null);
+  const [originalItineraryForRegret, setOriginalItineraryForRegret] = useState<Itinerary | null>(null);
 
   const cityName = city.name.split(",")[0]?.trim() ?? city.name;
   const destIata = getCityIata(cityName);
@@ -699,9 +700,12 @@ export function ItineraryBuilder({
                   <div className="space-y-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        setRegretItinerary(finalItinerary)
-                      }
+                      onClick={() => {
+                        setOriginalItineraryForRegret((prev) =>
+                          prev ?? (JSON.parse(JSON.stringify(finalItinerary)) as Itinerary)
+                        );
+                        setRegretItinerary(finalItinerary);
+                      }}
                       className="w-full py-2 px-4 rounded-xl text-sm font-medium border"
                       style={{
                         borderColor: "var(--accent-green)",
@@ -729,10 +733,12 @@ export function ItineraryBuilder({
         </div>
       </motion.div>
 
-      {regretItinerary && (
+      {regretItinerary && originalItineraryForRegret && (
         <RegretModal
           itinerary={regretItinerary}
+          originalItinerary={originalItineraryForRegret}
           onClose={() => setRegretItinerary(null)}
+          onKeepOriginal={() => setFinalItinerary(originalItineraryForRegret)}
           onSwitch={(alt) => {
             setFinalItinerary(alt);
             setRegretItinerary(null);

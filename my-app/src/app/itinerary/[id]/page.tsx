@@ -19,6 +19,7 @@ export default function ItineraryDetailPage() {
   const router = useRouter();
   const id = typeof params.id === "string" ? params.id : "";
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
+  const [originalItinerary, setOriginalItinerary] = useState<Itinerary | null>(null);
   const [regretOpen, setRegretOpen] = useState(false);
   const [showSaveBanner, setShowSaveBanner] = useState(false);
 
@@ -160,7 +161,10 @@ export default function ItineraryDetailPage() {
             </div>
             <button
               type="button"
-              onClick={() => setRegretOpen(true)}
+              onClick={() => {
+                setOriginalItinerary((prev) => prev ?? JSON.parse(JSON.stringify(itinerary)));
+                setRegretOpen(true);
+              }}
               className="w-full py-3 rounded-xl font-medium border"
               style={{ borderColor: "var(--accent-green)", color: "var(--accent-green)" }}
             >
@@ -177,12 +181,30 @@ export default function ItineraryDetailPage() {
         />
       )}
 
-      {regretOpen && (
+      {regretOpen && itinerary && originalItinerary && (
         <RegretModal
           itinerary={itinerary}
+          originalItinerary={originalItinerary}
           onClose={() => setRegretOpen(false)}
+          onKeepOriginal={() => {
+            setItinerary(originalItinerary);
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            const list: Itinerary[] = raw ? JSON.parse(raw) : [];
+            const idx = list.findIndex((i) => i.id === originalItinerary.id);
+            if (idx >= 0) {
+              list[idx] = originalItinerary;
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+            }
+          }}
           onSwitch={(alt) => {
             setItinerary(alt);
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            const list: Itinerary[] = raw ? JSON.parse(raw) : [];
+            const idx = list.findIndex((i) => i.id === alt.id);
+            if (idx >= 0) {
+              list[idx] = alt;
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+            }
             setRegretOpen(false);
           }}
         />
